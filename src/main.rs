@@ -7,7 +7,7 @@ use std::env::{self};
 use sdl2::{event::Event, keyboard::Keycode, pixels::Color, render::Canvas, video::Window};
 
 use emu::Emulator;
-const SCALING: u32 = 10;
+const SCALING: u32 = 5;
 const SCREEN_WIDTH: u32 = 160;
 const SCREEN_HEIGHT: u32 = 144;
 
@@ -48,11 +48,13 @@ fn main() {
         draw_screen(&emu, &mut canvas)
     }
 }
+
+//TODO: display screen, as well as Tiles and sprite data
 fn draw_screen(emulator: &Emulator, canvas: &mut Canvas<Window>) {
     canvas.set_draw_color(Color::RGB(0, 0, 0));
     canvas.clear();
 
-    let screen_buf = emulator.get_screen();
+    let screen_buf = emulator.get_display();
     canvas.set_draw_color(Color::RGB(255, 255, 255));
     
 

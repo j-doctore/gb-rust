@@ -17,11 +17,14 @@ TODO
 ## Goals
 * simple graphics/maybe UI
 * accurate/close Hardware emulation
-* passing all Blargg-Tests, maybe some from Mooneye
+* pass all Blargg-Tests, maybe some from Mooneye
 * Sound-Support?
+* real Games: get at least Tetris to work
 
-## Limitations
-
+## Limitations | What will not be covered
+* no 4-Player Adapter & no link cable support
+* no GB-Camera/Printer functionality
+* maybe not all MBCs will be supported
 
 ## License
 

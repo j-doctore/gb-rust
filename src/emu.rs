@@ -12,44 +12,72 @@ pub struct Emulator {
     //RAM
     wram: [u8; RAM_SIZE],
     vram: [u8; VRAM_SIZE],
-
-    screen: [[u8; 160]; 144],
-
+    //Display
+    display: [[u8; 160]; 144],
 }
 
 impl Emulator {
-    pub fn get_screen(&self) -> &[[u8; 160]; 144] {
-        &self.screen
+    pub fn get_display(&self) -> &[[u8; 160]; 144] {
+        &self.display
     }
 
     //TODO: proper reading
     pub fn read(&self, addr: u16) -> u8 {
         match addr {
             //16KiB ROM Bank
-            0x0000..=0x3FFF => {0}
+            0x0000..=0x3FFF => 0,
             //16KiB ROM Bank
-            0x4000..=0x7FFF => {0}
+            0x4000..=0x7FFF => 0,
             //VRAM
-            0x8000..=0x9FFF => {self.vram[addr as usize - 0x8000] }
+            0x8000..=0x9FFF => self.vram[addr as usize - 0x8000],
             //8KiB External RAM?
-            0xA000..=0xBFFF => {0}
+            0xA000..=0xBFFF => 0,
             //4KiB WRAM
-            0xC000..=0xCFFF => {self.wram[addr as usize - 0xC000] }
+            0xC000..=0xCFFF => self.wram[addr as usize - 0xC000],
             //4KiB WRAM
-            0xD000..=0xDFFF => {self.wram[addr as usize - 0xD000] }
+            0xD000..=0xDFFF => self.wram[addr as usize - 0xD000],
             //Echo RAM (DO NOT USE)
-            0xE000..=0xFDFF => {0}
+            0xE000..=0xFDFF => 0,
             //OAM
-            0xFE00..=0xFE9F => {0}
+            0xFE00..=0xFE9F => 0,
             //(DO NOT USE)
-            0xFEA0..=0xFEFF => {0}
+            0xFEA0..=0xFEFF => 0,
             //IO Registers
-            0xFF00..=0xFF7F => {0}
+            0xFF00..=0xFF7F => 0,
             //HRAM
-            0xFF80..=0xFFFE => {0}
+            0xFF80..=0xFFFE => 0,
             //Interrupt
-            0xFFFF..=0xFFFF => {0}
+            0xFFFF..=0xFFFF => 0,
         }
+    }
+
+    //TODO: proper writing
+    pub fn write(&mut self, addr: u16, value: u8) {
+        match addr {
+            //16KiB ROM Bank
+            0x0000..=0x7FFF => (),
+            //VRAM
+            0x8000..=0x9FFF => self.vram[addr as usize - 0x8000] = value,
+            //8KiB External RAM?
+            0xA000..=0xBFFF => (),
+            //4KiB WRAM
+            0xC000..=0xCFFF => self.wram[addr as usize - 0xC000] = value,
+            //4KiB WRAM
+            0xD000..=0xDFFF => self.wram[addr as usize - 0xD000] = value,
+            //Echo RAM (DO NOT USE)
+            0xE000..=0xFDFF => (),
+            //OAM
+            0xFE00..=0xFE9F => (),
+            //(DO NOT USE)
+            0xFEA0..=0xFEFF => (),
+            //IO Registers
+            0xFF00..=0xFF7F => (),
+            //HRAM
+            0xFF80..=0xFFFE => (),
+            //Interrupt
+            0xFFFF..=0xFFFF => (),
+        }
+
     }
 
     pub fn new() -> Self {
@@ -59,11 +87,36 @@ impl Emulator {
             registers: Register::new(),
             wram: [0; RAM_SIZE],
             vram: [0; RAM_SIZE],
-            screen: [[0; 160]; 144],
+            display: [[0; 160]; 144],
         }
+    }
+
+    fn push(&mut self, value: u8) {
+        self.write(self.sp, value);
+        self.sp -= 1;
+    }
+
+    fn pop(&mut self) -> u8 {
+        self.sp += 1;
+        self.read(self.sp)
     }
 
     pub fn load_rom(&self, rom: &String) {
         todo!()
+    }
+
+    fn fetch(&mut self) -> u8 {
+        todo!()
+    }
+
+    pub fn step(&mut self) {
+        //fetch opcode
+        let opcode = self.fetch();
+        todo!();
+        //execute opcode
+        match opcode {
+            0x00 => (), //NOP
+            _ => todo!("Opcode {:02X} not implemented", opcode),
+        }
     }
 }

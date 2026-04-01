@@ -31,7 +31,7 @@ impl Register {
         }
     }
 
-    pub fn get_al() {
+    pub fn get_af() {
         //TODO
         unimplemented!()
     }

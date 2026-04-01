@@ -9,3 +9,4 @@ fn get_cart_title() {
     cart.load(rom_path);
     println!("Title: {}", cart.get_title());
 }
+
