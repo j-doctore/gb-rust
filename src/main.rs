@@ -3,6 +3,7 @@ mod cartridge;
 mod cpu;
 mod emu;
 mod register;
+mod ppu;
 
 
 use std::env::{self};

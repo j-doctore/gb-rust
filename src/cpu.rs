@@ -5,8 +5,8 @@ pub struct Cpu {
     registers: Register,
     pc: u16,
     sp: u16,
-    ime: bool, // Interrupt Master Enable
-    ei_pending: bool,
+    ime: bool, //Interrupt Master Enable
+    ei_pending: bool, //EI delayed by one instruction, we need to track if pending
     halted: bool,
 }
 
