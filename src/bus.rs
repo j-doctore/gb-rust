@@ -86,7 +86,7 @@ impl MemoryBus {
                 //DEBUG BLARGG:
                 if addr == 0xFF02 && value == 0x81 {
                     let c = self.io[0x01] as char;
-                    print!("SB, {}", c);
+                    println!("{}", c);
                 }
             }
             //HRAM
