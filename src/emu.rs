@@ -20,7 +20,7 @@ impl Emulator {
     }
 
     pub fn tick(&mut self) {
-        self.cpu.step(&mut self.bus);
-        // after cpu.step(...)
+        let cycles = self.cpu.step(&mut self.bus);
+        //self.bus.ppu_mut().step(cycles);
     }
 }

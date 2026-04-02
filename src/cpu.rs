@@ -96,16 +96,18 @@ impl Cpu {
         }
     }
 
-    pub fn step(&mut self, bus: &mut MemoryBus) {
+    pub fn step(&mut self, bus: &mut MemoryBus) -> u32 {
         if self.ei_pending {
             self.ime = true;
             self.ei_pending = false;
         }
         if self.halted {
-            return;
+            return 4;
         }
 
         let opcode = self.fetch_byte(bus);
+        let mut branch_taken = false;
+        let mut cb_opcode: Option<u8> = None;
 
         //XXYYYZZZ
         match opcode {
@@ -371,24 +373,28 @@ impl Cpu {
                 let e = self.imm8(bus) as i8;
                 if !self.registers.flag_z() {
                     self.jr(e);
+                    branch_taken = true;
                 }
             }
             0x28 => {
                 let e = self.imm8(bus) as i8;
                 if self.registers.flag_z() {
                     self.jr(e);
+                    branch_taken = true;
                 }
             }
             0x30 => {
                 let e = self.imm8(bus) as i8;
                 if !self.registers.flag_c() {
                     self.jr(e);
+                    branch_taken = true;
                 }
             }
             0x38 => {
                 let e = self.imm8(bus) as i8;
                 if self.registers.flag_c() {
                     self.jr(e);
+                    branch_taken = true;
                 }
             }
             0xC3 => self.pc = self.imm16(bus),
@@ -396,24 +402,28 @@ impl Cpu {
                 let addr = self.imm16(bus);
                 if !self.registers.flag_z() {
                     self.pc = addr;
+                    branch_taken = true;
                 }
             }
             0xCA => {
                 let addr = self.imm16(bus);
                 if self.registers.flag_z() {
                     self.pc = addr;
+                    branch_taken = true;
                 }
             }
             0xD2 => {
                 let addr = self.imm16(bus);
                 if !self.registers.flag_c() {
                     self.pc = addr;
+                    branch_taken = true;
                 }
             }
             0xDA => {
                 let addr = self.imm16(bus);
                 if self.registers.flag_c() {
                     self.pc = addr;
+                    branch_taken = true;
                 }
             }
             0xE9 => self.pc = self.registers.get_hl(),
@@ -422,6 +432,7 @@ impl Cpu {
                 let ret = self.pc;
                 self.push_u16(bus, ret);
                 self.pc = addr;
+                branch_taken = true;
             }
             0xC4 => {
                 let addr = self.imm16(bus);
@@ -429,6 +440,7 @@ impl Cpu {
                     let ret = self.pc;
                     self.push_u16(bus, ret);
                     self.pc = addr;
+                    branch_taken = true;
                 }
             }
             0xCC => {
@@ -437,6 +449,7 @@ impl Cpu {
                     let ret = self.pc;
                     self.push_u16(bus, ret);
                     self.pc = addr;
+                    branch_taken = true;
                 }
             }
             0xD4 => {
@@ -445,6 +458,7 @@ impl Cpu {
                     let ret = self.pc;
                     self.push_u16(bus, ret);
                     self.pc = addr;
+                    branch_taken = true;
                 }
             }
             0xDC => {
@@ -453,49 +467,151 @@ impl Cpu {
                     let ret = self.pc;
                     self.push_u16(bus, ret);
                     self.pc = addr;
+                    branch_taken = true;
                 }
             }
-            0xC9 => self.pc = self.pop_u16(bus),
+            0xC9 => {
+                self.pc = self.pop_u16(bus);
+                branch_taken = true;
+            }
             0xD9 => {
                 self.pc = self.pop_u16(bus);
                 self.ime = true;
+                branch_taken = true;
             }
             0xC0 => {
                 if !self.registers.flag_z() {
                     self.pc = self.pop_u16(bus);
+                    branch_taken = true;
                 }
             }
             0xC8 => {
                 if self.registers.flag_z() {
                     self.pc = self.pop_u16(bus);
+                    branch_taken = true;
                 }
             }
             0xD0 => {
                 if !self.registers.flag_c() {
                     self.pc = self.pop_u16(bus);
+                    branch_taken = true;
                 }
             }
             0xD8 => {
                 if self.registers.flag_c() {
                     self.pc = self.pop_u16(bus);
+                    branch_taken = true;
                 }
             }
-            0xC7 => self.rst(bus, 0x00),
-            0xCF => self.rst(bus, 0x08),
-            0xD7 => self.rst(bus, 0x10),
-            0xDF => self.rst(bus, 0x18),
-            0xE7 => self.rst(bus, 0x20),
-            0xEF => self.rst(bus, 0x28),
-            0xF7 => self.rst(bus, 0x30),
-            0xFF => self.rst(bus, 0x38),
+            0xC7 => {
+                self.rst(bus, 0x00);
+                branch_taken = true;
+            }
+            0xCF => {
+                self.rst(bus, 0x08);
+                branch_taken = true;
+            }
+            0xD7 => {
+                self.rst(bus, 0x10);
+                branch_taken = true;
+            }
+            0xDF => {
+                self.rst(bus, 0x18);
+                branch_taken = true;
+            }
+            0xE7 => {
+                self.rst(bus, 0x20);
+                branch_taken = true;
+            }
+            0xEF => {
+                self.rst(bus, 0x28);
+                branch_taken = true;
+            }
+            0xF7 => {
+                self.rst(bus, 0x30);
+                branch_taken = true;
+            }
+            0xFF => {
+                self.rst(bus, 0x38);
+                branch_taken = true;
+            }
 
             // ===== CB-prefix =====
             0xCB => {
                 let cb = self.fetch_byte(bus);
                 self.exec_cb(bus, cb);
+                cb_opcode = Some(cb);
             }
 
             _ => println!("Opcode {:02X} not implemented (illegal or reserved)", opcode),
+        }
+
+        Self::instruction_cycles(opcode, branch_taken, cb_opcode)
+    }
+
+    fn instruction_cycles(opcode: u8, branch_taken: bool, cb_opcode: Option<u8>) -> u32 {
+        match opcode {
+            0x00 | 0x07 | 0x0F | 0x17 | 0x1F | 0x27 | 0x2F | 0x37 | 0x3F | 0x76 | 0xF3
+            | 0xFB | 0xE9 => 4,
+
+            0x40..=0x7F => {
+                let dst = (opcode >> 3) & 0x07;
+                let src = opcode & 0x07;
+                if dst == 6 || src == 6 { 8 } else { 4 }
+            }
+
+            0x06 | 0x0E | 0x16 | 0x1E | 0x26 | 0x2E | 0x3E => 8,
+            0x36 => 12,
+            0x02 | 0x0A | 0x12 | 0x1A | 0x22 | 0x2A | 0x32 | 0x3A | 0xE2 | 0xF2 => 8,
+            0xE0 | 0xF0 => 12,
+            0xEA | 0xFA => 16,
+
+            0x01 | 0x11 | 0x21 | 0x31 => 12,
+            0x08 => 20,
+            0xF8 => 12,
+            0xF9 => 8,
+            0xC5 | 0xD5 | 0xE5 | 0xF5 => 16,
+            0xC1 | 0xD1 | 0xE1 | 0xF1 => 12,
+
+            0x80..=0xBF => {
+                let src = opcode & 0x07;
+                if src == 6 { 8 } else { 4 }
+            }
+            0xC6 | 0xCE | 0xD6 | 0xDE | 0xE6 | 0xEE | 0xF6 | 0xFE => 8,
+
+            0x04 | 0x0C | 0x14 | 0x1C | 0x24 | 0x2C | 0x3C => 4,
+            0x34 => 12,
+            0x05 | 0x0D | 0x15 | 0x1D | 0x25 | 0x2D | 0x3D => 4,
+            0x35 => 12,
+
+            0x03 | 0x13 | 0x23 | 0x33 | 0x0B | 0x1B | 0x2B | 0x3B | 0x09 | 0x19 | 0x29
+            | 0x39 => 8,
+            0xE8 => 16,
+
+            0x10 => 4,
+
+            0x18 => 12,
+            0x20 | 0x28 | 0x30 | 0x38 => if branch_taken { 12 } else { 8 },
+            0xC3 => 16,
+            0xC2 | 0xCA | 0xD2 | 0xDA => if branch_taken { 16 } else { 12 },
+            0xCD => 24,
+            0xC4 | 0xCC | 0xD4 | 0xDC => if branch_taken { 24 } else { 12 },
+            0xC9 | 0xD9 => 16,
+            0xC0 | 0xC8 | 0xD0 | 0xD8 => if branch_taken { 20 } else { 8 },
+            0xC7 | 0xCF | 0xD7 | 0xDF | 0xE7 | 0xEF | 0xF7 | 0xFF => 16,
+
+            0xCB => {
+                let cb = cb_opcode.unwrap_or(0);
+                let x = cb >> 6;
+                let z = cb & 0x07;
+                if z == 6 {
+                    if x == 1 { 12 } else { 16 }
+                } else {
+                    8
+                }
+            }
+
+            _ => 4,
         }
     }
 
