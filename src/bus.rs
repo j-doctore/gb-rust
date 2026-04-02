@@ -84,9 +84,6 @@ impl MemoryBus {
             0xFF00..=0xFF7F => {
                 self.io[addr as usize - 0xFF00] = value;
                 //DEBUG BLARGG:
-                if addr == 0xFF01 {
-                    self.io[0x01] = value;
-                }
                 if addr == 0xFF02 && value == 0x81 {
                     let c = self.io[0x01] as char;
                     print!("SB, {}", c);
