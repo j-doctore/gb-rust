@@ -3,6 +3,7 @@ mod cpu;
 mod emu;
 mod register;
 
+
 use std::env::{self};
 use sdl2::{event::Event, keyboard::Keycode, pixels::Color, render::Canvas, video::Window};
 
@@ -20,8 +21,7 @@ fn main() {
 
     let rom_path = &args[1];
 
-    let emu = Emulator::new();
-    emu.load_rom(&rom_path);
+    let emu = Emulator::new(rom_path);
 
     let sdl_context = sdl2::init().unwrap();
     let video_subsystem = sdl_context.video().unwrap();
