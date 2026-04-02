@@ -137,9 +137,7 @@ impl Ppu {
             FF42_SCY => self.scy = value,
             FF43_SCX => self.scx = value,
             FF44_LY  => {
-                // Usually read-only; many emus ignore writes.
-                // Keep ignore for now:
-                let _ = value;
+                //should be read-only
             }
             FF45_LYC => self.lyc = value,
             FF46_DMA => {

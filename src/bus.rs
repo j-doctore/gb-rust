@@ -28,6 +28,10 @@ impl MemoryBus {
         &self.ppu
     }
 
+    pub fn ppu_mut(&mut self) -> &mut Ppu {
+        &mut self.ppu
+    }
+
     pub fn read_byte(&self, addr: u16) -> u8 {
         match addr {
             //16KiB ROM Bank

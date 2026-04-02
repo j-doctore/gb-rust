@@ -23,7 +23,7 @@ fn main() {
 
     let rom_path = &args[1];
 
-    let emu = Emulator::new(rom_path);
+    let mut emu = Emulator::new(rom_path);
 
     let sdl_context = sdl2::init().unwrap();
     let video_subsystem = sdl_context.video().unwrap();
@@ -47,18 +47,18 @@ fn main() {
                 _ => {}
             }
         }
-        draw_screen(&emu, &mut canvas)
+        draw_screen(&mut emu, &mut canvas)
     }
 }
 
 //TODO: display screen, as well as Tiles and sprite data
-fn draw_screen(emulator: &Emulator, canvas: &mut Canvas<Window>) {
+fn draw_screen(emulator: &mut Emulator, canvas: &mut Canvas<Window>) {
     canvas.set_draw_color(Color::RGB(0, 0, 0));
     canvas.clear();
 
     let screen_buf = emulator.get_display();
     canvas.set_draw_color(Color::RGB(255, 255, 255));
     
-
+    emulator.tick();
     canvas.present();
 }
