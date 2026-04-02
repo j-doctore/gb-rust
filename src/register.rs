@@ -8,10 +8,7 @@ pub struct Register {
     l: u8,
 
     //Flags
-    zero: u8,
-    subtraction: u8,
-    half_carry: u8,
-    carry: u8,
+    f: u8, //Flags-Bit: Z-7 N-6 H-5 C-4
 }
 
 impl Register {
@@ -24,99 +21,127 @@ impl Register {
             e: 0,
             h: 0,
             l: 0,
-            zero: 0,
-            subtraction: 0,
-            half_carry: 0,
-            carry: 0,
+
+            f: 0,
         }
     }
 
-    pub fn get_af() {
-        //TODO
-        unimplemented!()
+    //16-bit pairs
+    pub fn get_af(&self) -> u16 {
+        (self.a as u16) << 8 | (self.f as u16)
+    }
+    pub fn set_af(&mut self, value: u16) {
+        self.a = (value >> 8) as u8;
+        self.f = (value as u8) & 0xF0; // low nibble must be 0
     }
 
     pub fn get_bc(&self) -> u16 {
         (self.b as u16) << 8 | (self.c as u16)
     }
+    pub fn set_bc(&mut self, value: u16) {
+        self.b = (value >> 8) as u8;
+        self.c = value as u8;
+    }
 
     pub fn get_de(&self) -> u16 {
         (self.d as u16) << 8 | (self.e as u16)
     }
-
-    pub fn get_hl(&self) -> u16 {
-        (self.h as u16) >> 8 | (self.l as u16)
+    pub fn set_de(&mut self, value: u16) {
+        self.d = (value >> 8) as u8;
+        self.e = value as u8;
     }
 
+    pub fn get_hl(&self) -> u16 {
+        (self.h as u16) << 8 | (self.l as u16)
+    }
+    pub fn set_hl(&mut self, value: u16) {
+        self.h = (value >> 8) as u8;
+        self.l = value as u8;
+    }
+
+    //8-bit getters/setters
     pub fn get_a(&self) -> u8 {
         self.a
+    }
+    pub fn set_a(&mut self, v: u8) {
+        self.a = v;
     }
 
     pub fn get_b(&self) -> u8 {
         self.b
     }
+    pub fn set_b(&mut self, v: u8) {
+        self.b = v;
+    }
 
     pub fn get_c(&self) -> u8 {
         self.c
+    }
+    pub fn set_c(&mut self, v: u8) {
+        self.c = v;
     }
 
     pub fn get_d(&self) -> u8 {
         self.d
     }
+    pub fn set_d(&mut self, v: u8) {
+        self.d = v;
+    }
 
     pub fn get_e(&self) -> u8 {
         self.e
+    }
+    pub fn set_e(&mut self, v: u8) {
+        self.e = v;
     }
 
     pub fn get_h(&self) -> u8 {
         self.h
     }
+    pub fn set_h(&mut self, v: u8) {
+        self.h = v;
+    }
 
     pub fn get_l(&self) -> u8 {
         self.l
     }
-
-    pub fn set_a(&mut self, value: u8) {
-        self.a = value;
+    pub fn set_l(&mut self, v: u8) {
+        self.l = v;
     }
 
-    pub fn set_b(&mut self, value: u8) {
-        self.b = value;
+    //flag helpers
+
+    pub fn get_f(&self) -> u8 {
+        self.f & 0xF0
+    }
+    pub fn set_f(&mut self, f: u8) {
+        self.f = f & 0xF0;
     }
 
-    pub fn set_c(&mut self, value: u8) {
-        self.c = value;
+    //check if flag is active
+    pub fn flag_z(&self) -> bool {
+        (self.f & 0x80) != 0
+    }
+    pub fn flag_n(&self) -> bool {
+        (self.f & 0x40) != 0
+    }
+    pub fn flag_h(&self) -> bool {
+        (self.f & 0x20) != 0
+    }
+    pub fn flag_c(&self) -> bool {
+        (self.f & 0x10) != 0
     }
 
-    pub fn set_d(&mut self, value: u8) {
-        self.d = value;
+    pub fn set_flag_z(&mut self, on: bool) {
+        self.f = if on { self.f | 0x80 } else { self.f & !0x80 };
     }
-
-    pub fn set_e(&mut self, value: u8) {
-        self.e = value;
+    pub fn set_flag_n(&mut self, on: bool) {
+        self.f = if on { self.f | 0x40 } else { self.f & !0x40 };
     }
-
-    pub fn set_h(&mut self, value: u8) {
-        self.h = value;
+    pub fn set_flag_h(&mut self, on: bool) {
+        self.f = if on { self.f | 0x20 } else { self.f & !0x20 };
     }
-
-    pub fn set_l(&mut self, value: u8) {
-        self.l = value;
-    }
-
-    pub fn get_zero(&self) -> u8 {
-        self.zero
-    }
-
-    pub fn get_subtraction(&self) -> u8 {
-        self.subtraction
-    }
-
-    pub fn get_half_carry(&self) -> u8 {
-        self.half_carry
-    }
-
-    pub fn get_carry(&self) -> u8 {
-        self.carry
+    pub fn set_flag_c(&mut self, on: bool) {
+        self.f = if on { self.f | 0x10 } else { self.f & !0x10 };
     }
 }
