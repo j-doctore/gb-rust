@@ -11,6 +11,7 @@ pub struct MemoryBus {
     wram: [u8; WRAM_SIZE],
     hram: [u8; HRAM_SIZE],
     io: [u8; IO_SIZE],
+    ie: u8,
 }
 
 impl MemoryBus {
@@ -21,6 +22,7 @@ impl MemoryBus {
             wram: [0; WRAM_SIZE],
             hram: [0; HRAM_SIZE],
             io: [0; IO_SIZE],
+            ie: 0,
         }
     }
 
@@ -63,7 +65,7 @@ impl MemoryBus {
             //HRAM
             0xFF80..=0xFFFE => self.hram[addr as usize - 0xFF80],
             //Interrupt
-            0xFFFF => 0,
+            0xFFFF => self.ie,
             //0xFEA0..=0xFEFF prohibited
             _ => 0xFF,
         }
@@ -101,7 +103,7 @@ impl MemoryBus {
             //HRAM
             0xFF80..=0xFFFE => self.hram[addr as usize - 0xFF80] = value,
             //Interrupt
-            0xFFFF => (),
+            0xFFFF => self.ie = value,
             //0xFEA0..=0xFEFF prohibited ?> IGNORE
             _ => (),
         }

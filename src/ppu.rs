@@ -1,6 +1,10 @@
 const VRAM_SIZE: usize = 1024 * 8; //8KiB
 const OAM_SIZE: usize = 0xA0; // FE00-FE9F (160 bytes)
 
+const SCREEN_HEIGHT: usize = 144;
+const SCREEN_WIDTH: usize = 160;
+
+
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum Mode {
     HBlank = 0,
@@ -10,7 +14,7 @@ pub enum Mode {
 }
 
 pub struct Ppu {
-    screen: [[u8; 160]; 144],
+    screen: [[u8; SCREEN_WIDTH]; SCREEN_HEIGHT],
 
     oam: [u8; OAM_SIZE],
     vram: [u8; VRAM_SIZE],
@@ -32,8 +36,18 @@ pub struct Ppu {
 
 impl Ppu {
     pub fn new() -> Self {
+        let mut screen = [[0; SCREEN_WIDTH]; SCREEN_HEIGHT];
+        for y in 0..SCREEN_HEIGHT {
+            for x in 0..SCREEN_WIDTH {
+                let tx = x / 8;
+                let ty = y / 8;
+                let color_id = ((tx + ty) % 4) as u8;
+                screen[y][x] = color_id;
+            }
+        }
+
         Self {
-            screen: [[0; 160]; 144],
+            screen,
             oam: [0; OAM_SIZE],
             vram: [0; VRAM_SIZE],
 

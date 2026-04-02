@@ -2,12 +2,11 @@ mod bus;
 mod cartridge;
 mod cpu;
 mod emu;
-mod register;
 mod ppu;
+mod register;
 
-
+use sdl2::{event::Event, keyboard::Keycode, pixels::Color, render::Canvas, video::Window, rect::Rect};
 use std::env::{self};
-use sdl2::{event::Event, keyboard::Keycode, pixels::Color, render::Canvas, video::Window};
 
 use emu::Emulator;
 const SCALING: u32 = 5;
@@ -47,18 +46,35 @@ fn main() {
                 _ => {}
             }
         }
-        draw_screen(&mut emu, &mut canvas)
+        emu.tick();
+        draw_screen(&emu, &mut canvas)
     }
 }
 
 //TODO: display screen, as well as Tiles and sprite data
-fn draw_screen(emulator: &mut Emulator, canvas: &mut Canvas<Window>) {
+fn draw_screen(emulator: &Emulator, canvas: &mut Canvas<Window>) {
     canvas.set_draw_color(Color::RGB(0, 0, 0));
     canvas.clear();
 
     let screen_buf = emulator.get_display();
-    canvas.set_draw_color(Color::RGB(255, 255, 255));
-    
-    emulator.tick();
+    for (y, row) in screen_buf.iter().enumerate() {
+        for (x, &color_id) in row.iter().enumerate() {
+            let shade: u8 = match color_id {
+                0 => 255,
+                1 => 192,
+                2 => 96,
+                3 => 0,
+                _ => 255,
+            };
+            canvas.set_draw_color(Color::RGB(shade, shade, shade));
+            let rect = Rect::new(
+                (x as i32) * (SCALING as i32),
+                (y as i32) * (SCALING as i32),
+                SCALING,
+                SCALING,
+            );
+            let _ = canvas.fill_rect(rect);
+        }
+    }
     canvas.present();
 }

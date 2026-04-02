@@ -5,7 +5,7 @@ pub struct Cpu {
     registers: Register,
     pc: u16,
     sp: u16,
-    ime: bool, //Interrupt Master Enable
+    ime: bool,        //Interrupt Master Enable
     ei_pending: bool, //EI delayed by one instruction, we need to track if pending
     halted: bool,
 }
@@ -101,8 +101,26 @@ impl Cpu {
             self.ime = true;
             self.ei_pending = false;
         }
+
+        //read IF and IE
+        let if_reg = bus.read_byte(0xFF0F); // IF
+        let ie_reg = bus.read_byte(0xFFFF);
+
+        let pending = if_reg & ie_reg;
+
         if self.halted {
-            return 4;
+            if pending != 0 {
+                // Exit HALT; if IME set -> immediately service. If IME not set -> just resume (don't service yet).
+                self.halted = false;
+                if !self.ime {
+                    // We consumed the HALT stop — return a small cycles budget (e.g. 4 T) or 0.
+                    return 4;
+                }
+                // otherwise IME==true, fallthrough to service below
+            } else {
+                // still in halt and no interrupts -> nothing happens
+                return 0;
+            }
         }
 
         let opcode = self.fetch_byte(bus);
@@ -290,13 +308,25 @@ impl Cpu {
             }
 
             // ===== 16-bit ALU =====
-            0x03 => self.registers.set_bc(self.registers.get_bc().wrapping_add(1)),
-            0x13 => self.registers.set_de(self.registers.get_de().wrapping_add(1)),
-            0x23 => self.registers.set_hl(self.registers.get_hl().wrapping_add(1)),
+            0x03 => self
+                .registers
+                .set_bc(self.registers.get_bc().wrapping_add(1)),
+            0x13 => self
+                .registers
+                .set_de(self.registers.get_de().wrapping_add(1)),
+            0x23 => self
+                .registers
+                .set_hl(self.registers.get_hl().wrapping_add(1)),
             0x33 => self.sp = self.sp.wrapping_add(1),
-            0x0B => self.registers.set_bc(self.registers.get_bc().wrapping_sub(1)),
-            0x1B => self.registers.set_de(self.registers.get_de().wrapping_sub(1)),
-            0x2B => self.registers.set_hl(self.registers.get_hl().wrapping_sub(1)),
+            0x0B => self
+                .registers
+                .set_bc(self.registers.get_bc().wrapping_sub(1)),
+            0x1B => self
+                .registers
+                .set_de(self.registers.get_de().wrapping_sub(1)),
+            0x2B => self
+                .registers
+                .set_hl(self.registers.get_hl().wrapping_sub(1)),
             0x3B => self.sp = self.sp.wrapping_sub(1),
             0x09 => self.add_hl(self.registers.get_bc()),
             0x19 => self.add_hl(self.registers.get_de()),
@@ -543,7 +573,10 @@ impl Cpu {
                 cb_opcode = Some(cb);
             }
 
-            _ => println!("Opcode {:02X} not implemented (illegal or reserved)", opcode),
+            _ => println!(
+                "Opcode {:02X} not implemented (illegal or reserved)",
+                opcode
+            ),
         }
 
         Self::instruction_cycles(opcode, branch_taken, cb_opcode)
@@ -551,8 +584,8 @@ impl Cpu {
 
     fn instruction_cycles(opcode: u8, branch_taken: bool, cb_opcode: Option<u8>) -> u32 {
         match opcode {
-            0x00 | 0x07 | 0x0F | 0x17 | 0x1F | 0x27 | 0x2F | 0x37 | 0x3F | 0x76 | 0xF3
-            | 0xFB | 0xE9 => 4,
+            0x00 | 0x07 | 0x0F | 0x17 | 0x1F | 0x27 | 0x2F | 0x37 | 0x3F | 0x76 | 0xF3 | 0xFB
+            | 0xE9 => 4,
 
             0x40..=0x7F => {
                 let dst = (opcode >> 3) & 0x07;
@@ -584,20 +617,43 @@ impl Cpu {
             0x05 | 0x0D | 0x15 | 0x1D | 0x25 | 0x2D | 0x3D => 4,
             0x35 => 12,
 
-            0x03 | 0x13 | 0x23 | 0x33 | 0x0B | 0x1B | 0x2B | 0x3B | 0x09 | 0x19 | 0x29
-            | 0x39 => 8,
+            0x03 | 0x13 | 0x23 | 0x33 | 0x0B | 0x1B | 0x2B | 0x3B | 0x09 | 0x19 | 0x29 | 0x39 => 8,
             0xE8 => 16,
 
             0x10 => 4,
 
             0x18 => 12,
-            0x20 | 0x28 | 0x30 | 0x38 => if branch_taken { 12 } else { 8 },
+            0x20 | 0x28 | 0x30 | 0x38 => {
+                if branch_taken {
+                    12
+                } else {
+                    8
+                }
+            }
             0xC3 => 16,
-            0xC2 | 0xCA | 0xD2 | 0xDA => if branch_taken { 16 } else { 12 },
+            0xC2 | 0xCA | 0xD2 | 0xDA => {
+                if branch_taken {
+                    16
+                } else {
+                    12
+                }
+            }
             0xCD => 24,
-            0xC4 | 0xCC | 0xD4 | 0xDC => if branch_taken { 24 } else { 12 },
+            0xC4 | 0xCC | 0xD4 | 0xDC => {
+                if branch_taken {
+                    24
+                } else {
+                    12
+                }
+            }
             0xC9 | 0xD9 => 16,
-            0xC0 | 0xC8 | 0xD0 | 0xD8 => if branch_taken { 20 } else { 8 },
+            0xC0 | 0xC8 | 0xD0 | 0xD8 => {
+                if branch_taken {
+                    20
+                } else {
+                    8
+                }
+            }
             0xC7 | 0xCF | 0xD7 | 0xDF | 0xE7 | 0xEF | 0xF7 | 0xFF => 16,
 
             0xCB => {
