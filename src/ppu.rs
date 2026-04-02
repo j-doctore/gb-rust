@@ -4,7 +4,6 @@ const OAM_SIZE: usize = 0xA0; // FE00-FE9F (160 bytes)
 const SCREEN_HEIGHT: usize = 144;
 const SCREEN_WIDTH: usize = 160;
 
-
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum Mode {
     HBlank = 0,
@@ -19,35 +18,25 @@ pub struct Ppu {
     oam: [u8; OAM_SIZE],
     vram: [u8; VRAM_SIZE],
 
-    lcdc: u8,  // FF40
-    stat: u8,  // FF41 (upper bits writable, lower bits mostly status)
-    scy:  u8,  // FF42
-    scx:  u8,  // FF43
-    ly:   u8,  // FF44 (read-only from CPU POV)
-    lyc:  u8,  // FF45
-    bgp:  u8,  // FF47
-    obp0: u8,  // FF48
-    obp1: u8,  // FF49
-    wy:   u8,  // FF4A
-    wx:   u8,  // FF4B
+    lcdc: u8, // FF40
+    stat: u8, // FF41 (upper bits writable, lower bits mostly status)
+    scy: u8,  // FF42
+    scx: u8,  // FF43
+    ly: u8,   // FF44 (read-only from CPU POV)
+    lyc: u8,  // FF45
+    bgp: u8,  // FF47
+    obp0: u8, // FF48
+    obp1: u8, // FF49
+    wy: u8,   // FF4A
+    wx: u8,   // FF4B
 
     mode: Mode,
 }
 
 impl Ppu {
     pub fn new() -> Self {
-        let mut screen = [[0; SCREEN_WIDTH]; SCREEN_HEIGHT];
-        for y in 0..SCREEN_HEIGHT {
-            for x in 0..SCREEN_WIDTH {
-                let tx = x / 8;
-                let ty = y / 8;
-                let color_id = ((tx + ty) % 4) as u8;
-                screen[y][x] = color_id;
-            }
-        }
-
         Self {
-            screen,
+            screen: [[0; SCREEN_WIDTH]; SCREEN_HEIGHT],
             oam: [0; OAM_SIZE],
             vram: [0; VRAM_SIZE],
 
@@ -71,20 +60,36 @@ impl Ppu {
         &self.screen
     }
 
-    //Todo: mode logic
+    //TODO: mode logic
     pub fn read_vram(&self, addr: usize) -> u8 {
+        if self.mode == Mode::Transfer {
+            // During pixel transfer, VRAM is inaccessible to the CPU
+            return 0xFF;
+        }
         self.vram[addr]
     }
 
     pub fn write_vram(&mut self, addr: usize, value: u8) {
+        if self.mode == Mode::Transfer {
+            // During pixel transfer, VRAM is inaccessible to the CPU
+            return;
+        }
         self.vram[addr] = value;
     }
 
     pub fn read_oam(&self, addr: usize) -> u8 {
+        if self.mode == Mode::OamScan || self.mode == Mode::Transfer {
+            // During OAM scan and pixel transfer, OAM is inaccessible to the CPU
+            return 0xFF;
+        }
         self.oam[addr]
     }
-
+    //TODO: OAM writes should be ignored during certain PPU modes, and OAM should be written to by DMA transfers, not CPU writes. This is a temporary simplification.
     pub fn write_oam(&mut self, addr: usize, value: u8) {
+        if self.mode == Mode::OamScan || self.mode == Mode::Transfer {
+            // During OAM scan and pixel transfer, OAM is inaccessible to the CPU
+            return;
+        }
         self.oam[addr] = value;
     }
 
@@ -139,8 +144,8 @@ impl Ppu {
         }
     }
 
+    //TODO: remake this
     pub fn step(&mut self, cycles: u32) {
-        todo!();
+        todo!("PPU step logic not implemented yet");
     }
-
 }

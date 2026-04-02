@@ -97,14 +97,14 @@ impl MemoryBus {
                 //DEBUG BLARGG:
                 if addr == 0xFF02 && value == 0x81 {
                     let c = self.io[0x01] as char;
-                    println!("{}", c);
+                    print!("{}", c);
                 }
             }
             //HRAM
             0xFF80..=0xFFFE => self.hram[addr as usize - 0xFF80] = value,
             //Interrupt
             0xFFFF => self.ie = value,
-            //0xFEA0..=0xFEFF prohibited ?> IGNORE
+            //0xFEA0..=0xFEFF prohibited => IGNORE
             _ => (),
         }
     }

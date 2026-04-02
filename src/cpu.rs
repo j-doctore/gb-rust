@@ -96,32 +96,13 @@ impl Cpu {
         }
     }
 
+    //TODO: fix interrupts, halting, and add timers
     pub fn step(&mut self, bus: &mut MemoryBus) -> u32 {
         if self.ei_pending {
             self.ime = true;
             self.ei_pending = false;
         }
 
-        //read IF and IE
-        let if_reg = bus.read_byte(0xFF0F); // IF
-        let ie_reg = bus.read_byte(0xFFFF);
-
-        let pending = if_reg & ie_reg;
-
-        if self.halted {
-            if pending != 0 {
-                // Exit HALT; if IME set -> immediately service. If IME not set -> just resume (don't service yet).
-                self.halted = false;
-                if !self.ime {
-                    // We consumed the HALT stop — return a small cycles budget (e.g. 4 T) or 0.
-                    return 4;
-                }
-                // otherwise IME==true, fallthrough to service below
-            } else {
-                // still in halt and no interrupts -> nothing happens
-                return 0;
-            }
-        }
 
         let opcode = self.fetch_byte(bus);
         let mut branch_taken = false;

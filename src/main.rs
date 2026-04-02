@@ -20,9 +20,7 @@ fn main() {
         std::process::exit(1);
     }
 
-    let rom_path = &args[1];
-
-    let mut emu = Emulator::new(rom_path);
+    let mut emu = Emulator::new(&args[1]);
 
     let sdl_context = sdl2::init().unwrap();
     let video_subsystem = sdl_context.video().unwrap();
@@ -56,25 +54,5 @@ fn draw_screen(emulator: &Emulator, canvas: &mut Canvas<Window>) {
     canvas.set_draw_color(Color::RGB(0, 0, 0));
     canvas.clear();
 
-    let screen_buf = emulator.get_display();
-    for (y, row) in screen_buf.iter().enumerate() {
-        for (x, &color_id) in row.iter().enumerate() {
-            let shade: u8 = match color_id {
-                0 => 255,
-                1 => 192,
-                2 => 96,
-                3 => 0,
-                _ => 255,
-            };
-            canvas.set_draw_color(Color::RGB(shade, shade, shade));
-            let rect = Rect::new(
-                (x as i32) * (SCALING as i32),
-                (y as i32) * (SCALING as i32),
-                SCALING,
-                SCALING,
-            );
-            let _ = canvas.fill_rect(rect);
-        }
-    }
     canvas.present();
 }
