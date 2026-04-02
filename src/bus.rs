@@ -6,7 +6,7 @@ const HRAM_SIZE: usize = 0x7F; // FF80-FFFE (127 bytes)
 
 pub struct MemoryBus {
     cartridge: Cartridge,
-    ppu : Ppu,
+    ppu: Ppu,
 
     wram: [u8; WRAM_SIZE],
     hram: [u8; HRAM_SIZE],
@@ -22,6 +22,10 @@ impl MemoryBus {
             hram: [0; HRAM_SIZE],
             io: [0; IO_SIZE],
         }
+    }
+
+    pub fn ppu(&self) -> &Ppu {
+        &self.ppu
     }
 
     pub fn read_byte(&self, addr: u16) -> u8 {
@@ -48,7 +52,10 @@ impl MemoryBus {
             //OAM
             0xFE00..=0xFE9F => self.ppu.read_oam(addr as usize - 0xFE00),
             //IO Registers
+            0xFF40..=0xFF4B => self.ppu.read_reg(addr),
+
             0xFF00..=0xFF7F => self.io[addr as usize - 0xFF00],
+
             //HRAM
             0xFF80..=0xFFFE => self.hram[addr as usize - 0xFF80],
             //Interrupt
@@ -78,6 +85,7 @@ impl MemoryBus {
             //OAM
             0xFE00..=0xFE9F => self.ppu.write_oam(addr as usize - 0xFE00, value),
             //IO Registers
+            0xFF40..=0xFF4B => self.ppu.write_reg(addr, value),
             0xFF00..=0xFF7F => {
                 self.io[addr as usize - 0xFF00] = value;
                 //DEBUG BLARGG:
