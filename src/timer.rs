@@ -1,5 +1,5 @@
-const CPU_CLOCK: u8 = 4;
-const DIV_CLOCK: u8 = 16;
+const CPU_CLOCK: u8 = 4; // approx 4Mhz
+const DIV_CLOCK: u8 = 16; //approx 16Mhz
 
 pub struct TimerRegister {
     div: u8,
@@ -13,6 +13,8 @@ pub struct TimerRegister {
     timer_control: u8,
 
     request_interrupt: bool,
+
+    m_cycles_clock: u8
 }
 
 impl TimerRegister {
@@ -28,6 +30,7 @@ impl TimerRegister {
             timer_control: 0,
 
             request_interrupt: false,
+            m_cycles_clock: 0
         }
     }
 
@@ -87,6 +90,21 @@ impl TimerRegister {
                 self.request_interrupt = true;
             } else {
                 self.timer_counter += 1;
+            }
+        }
+    }
+
+
+    pub fn step(&mut self) {
+        self.m_cycles_clock +=1;
+        if self.m_cycles_clock >= CPU_CLOCK {
+            self.m_cycles_clock -= CPU_CLOCK;
+
+            self.inc_div();
+
+            match self.get_counter_rate() {
+                Some(counter_rate) => self.inc_counter(counter_rate),
+                None => {}
             }
         }
     }
