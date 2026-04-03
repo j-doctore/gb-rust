@@ -1,8 +1,6 @@
 use crate::bus::MemoryBus;
 use crate::register::Register;
 
-const CPU_CLOCK: usize = 4_000_000;
-
 pub struct Cpu {
     registers: Register,
     pc: u16,
@@ -105,6 +103,19 @@ impl Cpu {
             self.ei_pending = false;
         }
 
+        let ie_flag = bus.read_byte(0xFFFF);
+        let if_flag = bus.read_byte(0xFF0F);
+        let pending = ie_flag & if_flag & 0x1F;
+
+        if pending != 0 {
+            if self.halted {
+                //TODO
+            }
+            if self.ime {
+                self.ime = false;
+                //TODO
+            }
+        }
 
         let opcode = self.fetch_byte(bus);
         let mut branch_taken = false;
