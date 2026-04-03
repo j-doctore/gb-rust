@@ -8,6 +8,9 @@ pub struct Cpu {
     ime: bool,        //Interrupt Master Enable
     ei_pending: bool, //EI delayed by one instruction, we need to track if pending
     halted: bool,
+    step_cycles: u32,
+
+    halt_bug: bool,
 }
 
 impl Cpu {
@@ -19,22 +22,45 @@ impl Cpu {
             ime: false,
             ei_pending: false,
             halted: false,
+            step_cycles: 0,
+
+            halt_bug: false,
         }
     }
 
-    fn fetch_byte(&mut self, bus: &MemoryBus) -> u8 {
-        let byte = bus.read_byte(self.pc);
-        self.pc = self.pc.wrapping_add(1);
+    fn m_cycle(&mut self, bus: &mut MemoryBus) {
+        bus.tick(4);
+        self.step_cycles += 4;
+    }
+
+    fn read_byte_timed(&mut self, bus: &mut MemoryBus, addr: u16) -> u8 {
+        let byte = bus.read_byte(addr);
+        self.m_cycle(bus);
+        byte
+    }
+
+    fn write_byte_timed(&mut self, bus: &mut MemoryBus, addr: u16, value: u8) {
+        bus.write_byte(addr, value);
+        self.m_cycle(bus);
+    }
+
+    fn fetch_byte(&mut self, bus: &mut MemoryBus) -> u8 {
+        let byte = self.read_byte_timed(bus, self.pc);
+        if self.halt_bug {
+            self.halt_bug = false;
+        } else {
+            self.pc = self.pc.wrapping_add(1);
+        }
         byte
     }
 
     fn push_u8(&mut self, bus: &mut MemoryBus, value: u8) {
         self.sp = self.sp.wrapping_sub(1);
-        bus.write_byte(self.sp, value);
+        self.write_byte_timed(bus, self.sp, value);
     }
 
-    fn pop_u8(&mut self, bus: &MemoryBus) -> u8 {
-        let value = bus.read_byte(self.sp);
+    fn pop_u8(&mut self, bus: &mut MemoryBus) -> u8 {
+        let value = self.read_byte_timed(bus, self.sp);
         self.sp = self.sp.wrapping_add(1);
         value
     }
@@ -45,7 +71,7 @@ impl Cpu {
         self.push_u8(bus, hi);
         self.push_u8(bus, lo);
     }
-    fn pop_u16(&mut self, bus: &MemoryBus) -> u16 {
+    fn pop_u16(&mut self, bus: &mut MemoryBus) -> u16 {
         let lo = self.pop_u8(bus) as u16;
         let hi = self.pop_u8(bus) as u16;
         (hi << 8) | lo
@@ -58,17 +84,17 @@ impl Cpu {
         self.registers.set_flag_c(c);
     }
 
-    fn imm8(&mut self, bus: &MemoryBus) -> u8 {
+    fn imm8(&mut self, bus: &mut MemoryBus) -> u8 {
         self.fetch_byte(bus)
     }
 
-    fn imm16(&mut self, bus: &MemoryBus) -> u16 {
+    fn imm16(&mut self, bus: &mut MemoryBus) -> u16 {
         let lo = self.fetch_byte(bus) as u16;
         let hi = self.fetch_byte(bus) as u16;
         (hi << 8) | lo
     }
 
-    pub fn read_r(&self, bus: &MemoryBus, r_index: u8) -> u8 {
+    pub fn read_r(&mut self, bus: &mut MemoryBus, r_index: u8) -> u8 {
         match r_index {
             0 => self.registers.get_b(),
             1 => self.registers.get_c(),
@@ -76,7 +102,7 @@ impl Cpu {
             3 => self.registers.get_e(),
             4 => self.registers.get_h(),
             5 => self.registers.get_l(),
-            6 => bus.read_byte(self.registers.get_hl()),
+            6 => self.read_byte_timed(bus, self.registers.get_hl()),
             7 => self.registers.get_a(),
             _ => panic!("Invalid register: {}", r_index),
         }
@@ -90,7 +116,7 @@ impl Cpu {
             3 => self.registers.set_e(data),
             4 => self.registers.set_h(data),
             5 => self.registers.set_l(data),
-            6 => bus.write_byte(self.registers.get_hl(), data),
+            6 => self.write_byte_timed(bus, self.registers.get_hl(), data),
             7 => self.registers.set_a(data),
             _ => panic!("Invalid register: {}", r_index),
         }
@@ -98,23 +124,49 @@ impl Cpu {
 
     //TODO: fix interrupts, halting, and add timers
     pub fn step(&mut self, bus: &mut MemoryBus) -> u32 {
-        if self.ei_pending {
-            self.ime = true;
-            self.ei_pending = false;
+        self.step_cycles = 0;
+
+        let enable_ime_after_step = self.ei_pending;
+        self.ei_pending = false;
+
+        let pending = bus.pending_interrupts();
+
+        if self.halted {
+            if pending != 0 {
+                self.halted = false;
+            } else {
+                self.m_cycle(bus);
+                if enable_ime_after_step {
+                    self.ime = true;
+                }
+                return self.step_cycles;
+            }
         }
 
-        let ie_flag = bus.read_byte(0xFFFF);
-        let if_flag = bus.read_byte(0xFF0F);
-        let pending = ie_flag & if_flag & 0x1F;
+        if self.ime && pending != 0 {
+            self.halt_bug = false;
+            let irq_bit = pending.trailing_zeros() as u8;
+            let vector = match irq_bit {
+                0 => 0x40,
+                1 => 0x48,
+                2 => 0x50,
+                3 => 0x58,
+                4 => 0x60,
+                _ => unreachable!(),
+            };
 
-        if pending != 0 {
-            if self.halted {
-                //TODO
+            self.ime = false;
+            bus.acknowledge_interrupt(irq_bit);
+
+            self.m_cycle(bus);
+            self.m_cycle(bus);
+            self.m_cycle(bus);
+            self.push_u16(bus, self.pc);
+            self.pc = vector;
+            if enable_ime_after_step {
+                self.ime = true;
             }
-            if self.ime {
-                self.ime = false;
-                //TODO
-            }
+            return self.step_cycles;
         }
 
         let opcode = self.fetch_byte(bus);
@@ -126,7 +178,11 @@ impl Cpu {
             // ===== 8-bit load =====
             0x40..=0x7F => {
                 if opcode == 0x76 {
-                    self.halted = true;
+                    if (self.ime == false) && bus.pending_interrupts() != 0 {
+                        self.halt_bug = true;
+                    } else {
+                        self.halted = true;
+                    }
                 } else {
                     let dst = (opcode >> 3) & 0x07;
                     let src = opcode & 0x07;
@@ -139,53 +195,64 @@ impl Cpu {
                 let value = self.imm8(bus);
                 self.write_r(bus, dst, value);
             }
-            0x02 => bus.write_byte(self.registers.get_bc(), self.registers.get_a()),
-            0x12 => bus.write_byte(self.registers.get_de(), self.registers.get_a()),
+            0x02 => self.write_byte_timed(bus, self.registers.get_bc(), self.registers.get_a()),
+            0x12 => self.write_byte_timed(bus, self.registers.get_de(), self.registers.get_a()),
             0x22 => {
                 let hl = self.registers.get_hl();
-                bus.write_byte(hl, self.registers.get_a());
+                self.write_byte_timed(bus, hl, self.registers.get_a());
                 self.registers.set_hl(hl.wrapping_add(1));
             }
             0x32 => {
                 let hl = self.registers.get_hl();
-                bus.write_byte(hl, self.registers.get_a());
+                self.write_byte_timed(bus, hl, self.registers.get_a());
                 self.registers.set_hl(hl.wrapping_sub(1));
             }
-            0x0A => self.registers.set_a(bus.read_byte(self.registers.get_bc())),
-            0x1A => self.registers.set_a(bus.read_byte(self.registers.get_de())),
+            0x0A => {
+                let v = self.read_byte_timed(bus, self.registers.get_bc());
+                self.registers.set_a(v);
+            }
+            0x1A => {
+                let v = self.read_byte_timed(bus, self.registers.get_de());
+                self.registers.set_a(v);
+            }
             0x2A => {
                 let hl = self.registers.get_hl();
-                self.registers.set_a(bus.read_byte(hl));
+                let v = self.read_byte_timed(bus, hl);
+                self.registers.set_a(v);
                 self.registers.set_hl(hl.wrapping_add(1));
             }
             0x3A => {
                 let hl = self.registers.get_hl();
-                self.registers.set_a(bus.read_byte(hl));
+                let v = self.read_byte_timed(bus, hl);
+                self.registers.set_a(v);
                 self.registers.set_hl(hl.wrapping_sub(1));
             }
             0xE0 => {
                 let addr = 0xFF00u16 + self.imm8(bus) as u16;
-                bus.write_byte(addr, self.registers.get_a());
+                self.write_byte_timed(bus, addr, self.registers.get_a());
             }
             0xF0 => {
                 let addr = 0xFF00u16 + self.imm8(bus) as u16;
-                self.registers.set_a(bus.read_byte(addr));
+                let v = self.read_byte_timed(bus, addr);
+                self.registers.set_a(v);
             }
             0xE2 => {
                 let addr = 0xFF00u16 + self.registers.get_c() as u16;
-                bus.write_byte(addr, self.registers.get_a());
+                self.write_byte_timed(bus, addr, self.registers.get_a());
             }
             0xF2 => {
                 let addr = 0xFF00u16 + self.registers.get_c() as u16;
-                self.registers.set_a(bus.read_byte(addr));
+                let v = self.read_byte_timed(bus, addr);
+                self.registers.set_a(v);
             }
             0xEA => {
                 let addr = self.imm16(bus);
-                bus.write_byte(addr, self.registers.get_a());
+                self.write_byte_timed(bus, addr, self.registers.get_a());
             }
             0xFA => {
                 let addr = self.imm16(bus);
-                self.registers.set_a(bus.read_byte(addr));
+                let v = self.read_byte_timed(bus, addr);
+                self.registers.set_a(v);
             }
 
             // ===== 16-bit load / stack =====
@@ -206,8 +273,8 @@ impl Cpu {
             }
             0x08 => {
                 let addr = self.imm16(bus);
-                bus.write_byte(addr, self.sp as u8);
-                bus.write_byte(addr.wrapping_add(1), (self.sp >> 8) as u8);
+                self.write_byte_timed(bus, addr, self.sp as u8);
+                self.write_byte_timed(bus, addr.wrapping_add(1), (self.sp >> 8) as u8);
             }
             0xF8 => {
                 let e8 = self.imm8(bus) as i8;
@@ -366,7 +433,8 @@ impl Cpu {
             0x00 => {}
             0x10 => {
                 let _ = self.imm8(bus);
-                self.halted = true;
+                // STOP (DMG): placeholder behavior until full joypad/speed-switch support.
+                // Do not enter permanent halt state.
             }
             0x27 => self.daa(),
             0x2F => {
@@ -573,10 +641,19 @@ impl Cpu {
             ),
         }
 
-        Self::instruction_cycles(opcode, branch_taken, cb_opcode)
+        let target_cycles = Self::target_cycles(opcode, branch_taken, cb_opcode);
+        while self.step_cycles < target_cycles {
+            self.m_cycle(bus);
+        }
+
+        if enable_ime_after_step {
+            self.ime = true;
+        }
+
+        self.step_cycles
     }
 
-    fn instruction_cycles(opcode: u8, branch_taken: bool, cb_opcode: Option<u8>) -> u32 {
+    fn target_cycles(opcode: u8, branch_taken: bool, cb_opcode: Option<u8>) -> u32 {
         match opcode {
             0x00 | 0x07 | 0x0F | 0x17 | 0x1F | 0x27 | 0x2F | 0x37 | 0x3F | 0x76 | 0xF3 | 0xFB
             | 0xE9 => 4,
@@ -665,7 +742,7 @@ impl Cpu {
         }
     }
 
-    fn alu(&mut self, y: u8, z: u8, bus: &MemoryBus) {
+    fn alu(&mut self, y: u8, z: u8, bus: &mut MemoryBus) {
         let value = self.read_r(bus, z);
         let carry_in = if self.registers.flag_c() { 1 } else { 0 };
         match y {

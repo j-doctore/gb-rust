@@ -6,6 +6,7 @@ mod ppu;
 mod register;
 mod timer;
 mod interrupts;
+mod joypad;
 
 use sdl2::{event::Event, keyboard::Keycode, pixels::Color, render::Canvas, video::Window, rect::Rect};
 use std::env::{self};
@@ -14,6 +15,7 @@ use emulator::Emulator;
 const SCALING: u32 = 5;
 const SCREEN_WIDTH: u32 = 160;
 const SCREEN_HEIGHT: u32 = 144;
+const CYCLES_PER_FRAME: u32 = 70_224;
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -46,7 +48,7 @@ fn main() {
                 _ => {}
             }
         }
-        emu.tick();
+        emu.run_cycles(CYCLES_PER_FRAME);
         draw_screen(&emu, &mut canvas)
     }
 }
@@ -56,5 +58,28 @@ fn draw_screen(emulator: &Emulator, canvas: &mut Canvas<Window>) {
     canvas.set_draw_color(Color::RGB(0, 0, 0));
     canvas.clear();
 
+    let frame_buffer = emulator.get_display();
+    for (y, row) in frame_buffer.iter().enumerate() {
+        for (x, shade) in row.iter().enumerate() {
+            let (r, g, b) = shade_to_rgb(*shade);
+            canvas.set_draw_color(Color::RGB(r, g, b));
+            let _ = canvas.fill_rect(Rect::new(
+                (x as i32) * SCALING as i32,
+                (y as i32) * SCALING as i32,
+                SCALING,
+                SCALING,
+            ));
+        }
+    }
+
     canvas.present();
+}
+
+fn shade_to_rgb(s: u8) -> (u8, u8, u8) {
+    match s & 0x03 {
+           0 => (255, 255, 255), // white
+           1 => (192, 192, 192), // light gray
+           2 => (96, 96, 96),     // dark gray
+           _ => (0, 0, 0),       // black
+    }
 }

@@ -111,13 +111,6 @@ impl Register {
 
     //flag helpers
 
-    pub fn get_f(&self) -> u8 {
-        self.f & 0xF0
-    }
-    pub fn set_f(&mut self, f: u8) {
-        self.f = f & 0xF0;
-    }
-
     //check if flag is active
     pub fn flag_z(&self) -> bool {
         (self.f & 0x80) != 0

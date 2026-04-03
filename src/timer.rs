@@ -1,111 +1,86 @@
-const CPU_CLOCK: u8 = 4; // approx 4Mhz
-const DIV_CLOCK: u8 = 16; //approx 16Mhz
-
 pub struct TimerRegister {
-    div: u8,
-    div_clock: u8,
+    div: u8,          // FF04
+    tima: u8,         // FF05
+    tma: u8,          // FF06
+    tac: u8,          // FF07
 
-    timer_counter: u8,
-    counter_clock: u8,
-
-    timer_modulo: u8,
-
-    timer_control: u8,
-
-    request_interrupt: bool,
-
-    m_cycles_clock: u8
+    div_counter: u16,
+    tima_counter: u16,
 }
 
 impl TimerRegister {
     pub fn new() -> TimerRegister {
         Self {
             div: 0,
-            div_clock: 0,
+            tima: 0,
+            tma: 0,
+            tac: 0,
 
-            timer_counter: 0,
-            counter_clock: 0,
-
-            timer_modulo: 0,
-            timer_control: 0,
-
-            request_interrupt: false,
-            m_cycles_clock: 0
+            div_counter: 0,
+            tima_counter: 0,
         }
     }
 
     pub fn read_byte(&self, addr: u16) -> u8 {
         match addr {
             0xFF04 => self.div,
-            0xFF05 => self.timer_counter,
-            0xFF06 => self.timer_modulo,
-            0xFF07 => self.timer_control,
+            0xFF05 => self.tima,
+            0xFF06 => self.tma,
+            0xFF07 => self.tac | 0xF8,
             _ => unreachable!(),
         }
     }
 
     pub fn write_byte(&mut self, addr: u16, val: u8) {
         match addr {
-            0xFF04 => self.set_div(val),
-            0xFF05 => self.timer_counter = val,
-            0xFF06 => self.timer_modulo = val,
-            0xFF07 => self.timer_control = val,
+            0xFF04 => self.reset_div(),
+            0xFF05 => self.tima = val,
+            0xFF06 => self.tma = val,
+            0xFF07 => self.tac = val & 0x07,
             _ => unreachable!(),
         }
     }
 
-    fn set_div(&mut self, _val: u8) {
-        self.div_clock = 0;
+    fn reset_div(&mut self) {
+        self.div_counter = 0;
         self.div = 0;
-        //TODO: m-cycle?
     }
 
-    pub fn get_counter_rate(&self) -> Option<u8> {
-        //TODO: maybe mask with 0x7 - because of EnableFlag?
-        match self.timer_control & 0x3 {
-            0x00 => Some(64), // 256/4
-            0x01 => Some(1),  // 4/4
-            0x02 => Some(4),  //16/4
-            0x03 => Some(16), //64/4
-            _ => None,
+    fn timer_period(&self) -> u16 {
+        match self.tac & 0x03 {
+            0x00 => 1024, //~ 4096 Hz: 4_000_000/4096 = 1024 cycles
+            0x01 => 16,
+            0x02 => 64,
+            0x03 => 256,
+            _ => unreachable!(),
         }
     }
 
-    pub fn inc_div(&mut self) {
-        self.div_clock += 1;
-        if self.div_clock >= DIV_CLOCK {
-            self.div_clock = 0;
-            self.div += 1;
+    pub fn step(&mut self, t_cycles: u32) -> bool {
+        let mut request_timer_interrupt = false;
+
+        self.div_counter = self.div_counter.wrapping_add(t_cycles as u16);
+        while self.div_counter >= 256 {
+            self.div_counter -= 256;
+            self.div = self.div.wrapping_add(1);
         }
-    }
 
-    pub fn inc_counter(&mut self, counter_rate: u8) {
-        self.counter_clock += 1;
+        if (self.tac & 0x04) != 0 {
+            let period = self.timer_period();
+            self.tima_counter = self.tima_counter.wrapping_add(t_cycles as u16);
 
-        if self.counter_clock >= counter_rate {
-            self.counter_clock = 0;
-
-            if self.timer_counter == 0xFF {
-                self.timer_counter = self.timer_modulo;
-                self.request_interrupt = true;
-            } else {
-                self.timer_counter += 1;
+            while self.tima_counter >= period {
+                self.tima_counter -= period;
+                let (next, overflow) = self.tima.overflowing_add(1);
+                if overflow {
+                    self.tima = self.tma;
+                    request_timer_interrupt = true;
+                } else {
+                    self.tima = next;
+                }
             }
         }
-    }
 
-
-    pub fn step(&mut self) {
-        self.m_cycles_clock +=1;
-        if self.m_cycles_clock >= CPU_CLOCK {
-            self.m_cycles_clock -= CPU_CLOCK;
-
-            self.inc_div();
-
-            match self.get_counter_rate() {
-                Some(counter_rate) => self.inc_counter(counter_rate),
-                None => {}
-            }
-        }
+        request_timer_interrupt
     }
 }

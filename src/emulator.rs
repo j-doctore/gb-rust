@@ -19,7 +19,14 @@ impl Emulator {
         }
     }
 
-    pub fn tick(&mut self) {
-        self.cpu.step(&mut self.bus);
+    pub fn tick(&mut self) -> u32 {
+        self.cpu.step(&mut self.bus)
+    }
+
+    pub fn run_cycles(&mut self, cycles: u32) {
+        let mut elapsed = 0u32;
+        while elapsed < cycles {
+            elapsed = elapsed.saturating_add(self.tick());
+        }
     }
 }

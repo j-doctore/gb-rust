@@ -69,14 +69,6 @@ impl Cartridge {
         String::from_utf8_lossy(title_bytes).to_string()
     }
 
-    pub fn get_rom_size(&self) -> usize {
-        Self::rom_size_from_header(self.rom[ROM_SIZE])
-    }
-
-    pub fn get_ram_size(&self) -> usize {
-        Self::parse_ram_size(self.rom[RAM_SIZE]).unwrap_or(0)
-    }
-
     fn parse_ram_size(header_value: u8) -> Option<usize> {
         let ram_size = match header_value {
             0x00 => 0,
