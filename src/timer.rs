@@ -51,9 +51,9 @@ impl TimerRegister {
         }
     }
 
-    fn set_div(&mut self, val: u8) {
+    fn set_div(&mut self, _val: u8) {
         self.div_clock = 0;
-        self.div = val;
+        self.div = 0;
         //TODO: m-cycle?
     }
 
