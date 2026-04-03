@@ -24,16 +24,49 @@ fn main() {
         std::process::exit(1);
     }
 
-    let mut emu = Emulator::new(&args[1]);
+    let mut emu = match Emulator::new(&args[1]) {
+        Ok(e) => e,
+        Err(err) => {
+            eprintln!("Failed to initialize emulator: {}", err);
+            std::process::exit(1);
+        }
+    };
 
-    let sdl_context = sdl2::init().unwrap();
-    let video_subsystem = sdl_context.video().unwrap();
-    let window = video_subsystem
+    let sdl_context = match sdl2::init() {
+        Ok(ctx) => ctx,
+        Err(e) => {
+            eprintln!("SDL initialization failed: {}", e);
+            std::process::exit(1);
+        }
+    };
+
+    let video_subsystem = match sdl_context.video() {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("SDL video subsystem init failed: {}", e);
+            std::process::exit(1);
+        }
+    };
+
+    let window = match video_subsystem
         .window(&args[1], SCREEN_WIDTH * SCALING, SCREEN_HEIGHT * SCALING)
         .position_centered()
         .build()
-        .unwrap();
-    let mut canvas = window.into_canvas().present_vsync().build().unwrap();
+    {
+        Ok(w) => w,
+        Err(e) => {
+            eprintln!("SDL window creation failed: {}", e);
+            std::process::exit(1);
+        }
+    };
+
+    let mut canvas = match window.into_canvas().present_vsync().build() {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("SDL canvas creation failed: {}", e);
+            std::process::exit(1);
+        }
+    };
     canvas.present();
 
     let mut event_pump = sdl_context.event_pump().unwrap();

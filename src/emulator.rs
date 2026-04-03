@@ -12,11 +12,9 @@ impl Emulator {
         &self.bus.ppu().get_display()
     }
 
-    pub fn new(rom_path: &str) -> Self {
-        Emulator {
-            cpu: Cpu::new(),
-            bus: MemoryBus::new(Cartridge::new(rom_path)),
-        }
+    pub fn new(rom_path: &str) -> Result<Self, String> {
+        let cart = Cartridge::new(rom_path)?;
+        Ok(Emulator { cpu: Cpu::new(), bus: MemoryBus::new(cart) })
     }
 
     pub fn tick(&mut self) -> u32 {

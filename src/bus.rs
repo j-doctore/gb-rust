@@ -1,5 +1,5 @@
 use crate::cartridge::Cartridge;
-use crate::interrupts::InterruptType;
+use crate::interrupts::{InterruptType, IF_UNUSED_BITS_MASK};
 use crate::ppu::Ppu;
 use crate::timer::TimerRegister;
 use crate::joypad::Joypad;
@@ -51,14 +51,7 @@ impl MemoryBus {
             //VRAM
             0x8000..=0x9FFF => self.ppu.read_vram(addr as usize - 0x8000),
             //8KiB External RAM?
-            0xA000..=0xBFFF => {
-                let ram_addr = addr as usize - 0xA000;
-                if ram_addr < self.cartridge.ram.len() {
-                    self.cartridge.ram[ram_addr]
-                } else {
-                    0xFF
-                }
-            }
+            0xA000..=0xBFFF => self.read_ext_ram(addr),
             //8KiB WRAM
             0xC000..=0xDFFF => self.wram[addr as usize - 0xC000],
             //Echo RAM 0xE000..=0xFDFF
@@ -68,13 +61,7 @@ impl MemoryBus {
             //PPU Registers
             0xFF40..=0xFF4B => self.ppu.read_reg(addr),
             //IO Registers
-            0xFF00..=0xFF7F => match addr & 0x00FF {
-                0x00 => self.joypad.read(),
-                0x0F => self.if_reg | 0xE0,
-                0x04..=0x07 => self.timers.read_byte(addr),
-                //TODO
-                _ => self.io[addr as usize - 0xFF00],
-            },
+            0xFF00..=0xFF7F => self.read_io(addr),
 
             //HRAM
             0xFF80..=0xFFFE => self.hram[addr as usize - 0xFF80],
@@ -92,12 +79,7 @@ impl MemoryBus {
             //VRAM
             0x8000..=0x9FFF => self.ppu.write_vram(addr as usize - 0x8000, value),
             //8KiB External RAM?
-            0xA000..=0xBFFF => {
-                let ram_addr = addr as usize - 0xA000;
-                if ram_addr < self.cartridge.ram.len() {
-                    self.cartridge.ram[ram_addr] = value;
-                }
-            }
+            0xA000..=0xBFFF => self.write_ext_ram(addr, value),
             //8KiB WRAM
             0xC000..=0xDFFF => self.wram[addr as usize - 0xC000] = value,
             //Echo RAM 0xE000..=0xFDFF
@@ -111,28 +93,48 @@ impl MemoryBus {
                     self.do_oam_dma(value);
                 }
             }
-            0xFF00..=0xFF7F => {
-                match addr & 0xFF {
-                    0x00 => self.joypad.write(value),
-                    0x0F => self.if_reg = value & 0x1F,
-                    0x04..=0x07 => self.timers.write_byte(addr, value),
-                    //TODO
-                    _ => {
-                        self.io[addr as usize - 0xFF00] = value;
-                        //DEBUG BLARGG:
-                        if addr == 0xFF02 && value == 0x81 {
-                            let c = self.io[0x01] as char;
-                            print!("{}", c);
-                        }
-                    }
-                }
-            }
+            0xFF00..=0xFF7F => self.write_io(addr, value),
             //HRAM
             0xFF80..=0xFFFE => self.hram[addr as usize - 0xFF80] = value,
             //Interrupt
             0xFFFF => self.ie = value,
             //0xFEA0..=0xFEFF prohibited => IGNORE
             _ => (),
+        }
+    }
+
+    fn read_ext_ram(&self, addr: u16) -> u8 {
+        self.cartridge.read_ram(addr)
+    }
+
+    fn write_ext_ram(&mut self, addr: u16, value: u8) {
+        self.cartridge.write_ram(addr, value);
+    }
+
+    fn read_io(&self, addr: u16) -> u8 {
+        match addr & 0x00FF {
+            0x00 => self.joypad.read(),
+            0x0F => self.if_reg | IF_UNUSED_BITS_MASK,
+            0x04..=0x07 => self.timers.read_byte(addr),
+            //TODO
+            _ => self.io[addr as usize - 0xFF00],
+        }
+    }
+
+    fn write_io(&mut self, addr: u16, value: u8) {
+        match addr & 0x00FF {
+            0x00 => self.joypad.write(value),
+            0x0F => self.if_reg = value & 0x1F,
+            0x04..=0x07 => self.timers.write_byte(addr, value),
+            //TODO
+            _ => {
+                self.io[addr as usize - 0xFF00] = value;
+                //DEBUG BLARGG:
+                if addr == 0xFF02 && value == 0x81 {
+                    let c = self.io[0x01] as char;
+                    print!("{}", c);
+                }
+            }
         }
     }
 
@@ -168,7 +170,6 @@ impl MemoryBus {
     }
 
     pub fn request_interrupt(&mut self, irq: InterruptType) {
-        let bit: usize = irq.into();
-        self.if_reg |= 1 << bit;
+        self.if_reg |= irq.mask();
     }
 }

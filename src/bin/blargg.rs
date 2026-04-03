@@ -10,8 +10,11 @@ pub fn main() {
 
     let rom_path = &args[1];
 
-    let mut emu = Emulator::new(&rom_path);
+    let mut emu = Emulator::new(&rom_path).unwrap_or_else(|err| {
+        eprintln!("Failed to initialize emulator: {}", err);
+        std::process::exit(1);
+    });
     loop {
-        emu.tick();
+        emu.run_cycles(70224); // Run for one frame
     }
 }

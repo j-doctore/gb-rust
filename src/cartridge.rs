@@ -22,7 +22,7 @@ pub struct Cartridge {
 }
 
 impl Cartridge {
-    pub fn new(path: &str) -> Self {
+    pub fn new(path: &str) -> Result<Self, String> {
         let mut cart = Cartridge {
             rom: Vec::new(),
             ram: Vec::new(),
@@ -30,25 +30,26 @@ impl Cartridge {
             ram_banks: 0,
             cart_type: CartridgeType::RomOnly,
         };
-        cart.load(path);
-        cart
+        cart.load(path).map_err(|e| e.to_string())?;
+        Ok(cart)
     }
 
-    fn load(&mut self, path: &str) {
-        let rom = fs::read(path).unwrap_or_else(|e| panic!("Failed to read ROM file {}: {}", path, e));
+    fn load(&mut self, path: &str) -> Result<(), Box<dyn std::error::Error>> {
+        let rom = fs::read(path).map_err(|e| format!("Failed to read ROM file {}: {}", path, e))?;
         let cart_type = Self::parse_cartridge_type(&rom)
-            .unwrap_or_else(|| panic!("Unsupported cartridge type: {:#04X}", rom[CARTRIDGE_TYPE]));
+            .ok_or_else(|| format!("Unsupported cartridge type: {:#04X}", rom[CARTRIDGE_TYPE]))?;
 
         let rom_banks = Self::parse_rom_banks(rom[ROM_SIZE])
-            .unwrap_or_else(|| panic!("Invalid ROM size header value: {:#04X}", rom[ROM_SIZE]));
+            .ok_or_else(|| format!("Invalid ROM size header value: {:#04X}", rom[ROM_SIZE]))?;
         let ram_size = Self::parse_ram_size(rom[RAM_SIZE])
-            .unwrap_or_else(|| panic!("Invalid RAM size header value: {:#04X}", rom[RAM_SIZE]));
+            .ok_or_else(|| format!("Invalid RAM size header value: {:#04X}", rom[RAM_SIZE]))?;
 
         self.ram = vec![0; ram_size];
         self.rom = rom;
         self.cart_type = cart_type;
         self.rom_banks = rom_banks;
         self.ram_banks = if ram_size == 0 { 0 } else { (ram_size / RAM_BANK_LEN) as u8 };
+        Ok(())
     }
 
     pub fn get_header(&self) -> &[u8] {
@@ -99,18 +100,18 @@ impl Cartridge {
         Some(num_banks)
     }
 
-    fn rom_size_from_header(header_value: u8) -> usize {
+    fn rom_size_from_header(header_value: u8) -> Option<usize> {
         match header_value {
-            0x00 => 32 * 1024,
-            0x01 => 64 * 1024,
-            0x02 => 128 * 1024,
-            0x03 => 256 * 1024,
-            0x04 => 512 * 1024,
-            0x05 => 1024 * 1024,
-            0x06 => 2048 * 1024,
-            0x07 => 4096 * 1024,
-            0x08 => 8192 * 1024,
-            _ => panic!("Unsupported ROM size header value: {:#04X}", header_value),
+            0x00 => Some(32 * 1024),
+            0x01 => Some(64 * 1024),
+            0x02 => Some(128 * 1024),
+            0x03 => Some(256 * 1024),
+            0x04 => Some(512 * 1024),
+            0x05 => Some(1024 * 1024),
+            0x06 => Some(2048 * 1024),
+            0x07 => Some(4096 * 1024),
+            0x08 => Some(8192 * 1024),
+            _ => None,
         }
     }
 
@@ -136,5 +137,24 @@ impl Cartridge {
             _ => return None,
         };
         Some(cart_type)
+    }
+
+
+    /// Read from cartridge external RAM (0xA000..0xBFFF). Returns 0xFF if out of range or absent.
+    pub fn read_ram(&self, addr: u16) -> u8 {
+        let idx = addr as usize - 0xA000;
+        if idx < self.ram.len() {
+            self.ram[idx]
+        } else {
+            0xFF
+        }
+    }
+
+    /// Write to cartridge external RAM (0xA000..0xBFFF). Silently ignores out-of-range writes.
+    pub fn write_ram(&mut self, addr: u16, value: u8) {
+        let idx = addr as usize - 0xA000;
+        if idx < self.ram.len() {
+            self.ram[idx] = value;
+        }
     }
 }

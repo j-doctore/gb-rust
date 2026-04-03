@@ -1,4 +1,5 @@
 use crate::bus::MemoryBus;
+use crate::interrupts::InterruptType;
 use crate::register::Register;
 
 pub struct Cpu {
@@ -104,7 +105,10 @@ impl Cpu {
             5 => self.registers.get_l(),
             6 => self.read_byte_timed(bus, self.registers.get_hl()),
             7 => self.registers.get_a(),
-            _ => panic!("Invalid register: {}", r_index),
+            _ => {
+                eprintln!("read_r: invalid register index {} - returning 0", r_index);
+                0
+            }
         }
     }
 
@@ -118,7 +122,7 @@ impl Cpu {
             5 => self.registers.set_l(data),
             6 => self.write_byte_timed(bus, self.registers.get_hl(), data),
             7 => self.registers.set_a(data),
-            _ => panic!("Invalid register: {}", r_index),
+            _ => eprintln!("write_r: invalid register index {} - write ignored", r_index),
         }
     }
 
@@ -145,24 +149,23 @@ impl Cpu {
 
         if self.ime && pending != 0 {
             self.halt_bug = false;
-            let irq_bit = pending.trailing_zeros() as u8;
-            let vector = match irq_bit {
-                0 => 0x40,
-                1 => 0x48,
-                2 => 0x50,
-                3 => 0x58,
-                4 => 0x60,
-                _ => unreachable!(),
+            let irq = match InterruptType::highest_priority_from_pending(pending) {
+                Some(i) => i,
+                None => {
+                    eprintln!("step(): pending interrupts non-zero but no known IRQ bit found: {:#04x}", pending);
+                    if enable_ime_after_step { self.ime = true; }
+                    return self.step_cycles;
+                }
             };
 
             self.ime = false;
-            bus.acknowledge_interrupt(irq_bit);
+            bus.acknowledge_interrupt(irq.bit());
 
             self.m_cycle(bus);
             self.m_cycle(bus);
             self.m_cycle(bus);
             self.push_u16(bus, self.pc);
-            self.pc = vector;
+            self.pc = irq.vector();
             if enable_ime_after_step {
                 self.ime = true;
             }
