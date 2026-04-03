@@ -1,14 +1,16 @@
 mod bus;
 mod cartridge;
 mod cpu;
-mod emu;
+mod emulator;
 mod ppu;
 mod register;
+mod timer;
+mod interrupts;
 
 use sdl2::{event::Event, keyboard::Keycode, pixels::Color, render::Canvas, video::Window, rect::Rect};
 use std::env::{self};
 
-use emu::Emulator;
+use emulator::Emulator;
 const SCALING: u32 = 5;
 const SCREEN_WIDTH: u32 = 160;
 const SCREEN_HEIGHT: u32 = 144;

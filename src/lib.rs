@@ -3,8 +3,10 @@
 mod bus;
 mod cartridge;
 mod cpu;
-mod emu;
+mod emulator;
 mod ppu;
 mod register;
-pub use emu::Emulator; // Re-export Emulator for external use
+mod timer;
+pub use timer::TimerRegister;
+pub use emulator::Emulator; // Re-export Emulator for external use
 pub use cartridge::Cartridge; // Re-export Cartridge for external use

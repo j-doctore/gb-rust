@@ -1,5 +1,6 @@
 use crate::cartridge::Cartridge;
 use crate::ppu::Ppu;
+use crate::timer::TimerRegister;
 const WRAM_SIZE: usize = 1024 * 8; //8KiB
 const IO_SIZE: usize = 0x80; // FF00-FF7F (128 bytes)
 const HRAM_SIZE: usize = 0x7F; // FF80-FFFE (127 bytes)
@@ -7,7 +8,7 @@ const HRAM_SIZE: usize = 0x7F; // FF80-FFFE (127 bytes)
 pub struct MemoryBus {
     cartridge: Cartridge,
     ppu: Ppu,
-
+    timers: TimerRegister,
     wram: [u8; WRAM_SIZE],
     hram: [u8; HRAM_SIZE],
     io: [u8; IO_SIZE],
@@ -19,6 +20,7 @@ impl MemoryBus {
         Self {
             cartridge,
             ppu: Ppu::new(),
+            timers: TimerRegister::new(),
             wram: [0; WRAM_SIZE],
             hram: [0; HRAM_SIZE],
             io: [0; IO_SIZE],
@@ -60,7 +62,11 @@ impl MemoryBus {
             //IO Registers
             0xFF40..=0xFF4B => self.ppu.read_reg(addr),
 
-            0xFF00..=0xFF7F => self.io[addr as usize - 0xFF00],
+            0xFF00..=0xFF7F => match addr & 0x00FF {
+                0x04..=0x07 => self.timers.read_byte(addr),
+                //TODO
+                _ => self.io[addr as usize - 0xFF00],
+            },
 
             //HRAM
             0xFF80..=0xFFFE => self.hram[addr as usize - 0xFF80],
@@ -93,11 +99,17 @@ impl MemoryBus {
             //IO Registers
             0xFF40..=0xFF4B => self.ppu.write_reg(addr, value),
             0xFF00..=0xFF7F => {
-                self.io[addr as usize - 0xFF00] = value;
-                //DEBUG BLARGG:
-                if addr == 0xFF02 && value == 0x81 {
-                    let c = self.io[0x01] as char;
-                    print!("{}", c);
+                match addr & 0xFF {
+                    0x04..=0x07 => self.timers.write_byte(addr, value),
+                    //TODO
+                    _ => {
+                        self.io[addr as usize - 0xFF00] = value;
+                        //DEBUG BLARGG:
+                        if addr == 0xFF02 && value == 0x81 {
+                            let c = self.io[0x01] as char;
+                            print!("{}", c);
+                        }
+                    }
                 }
             }
             //HRAM

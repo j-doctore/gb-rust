@@ -1,6 +1,8 @@
 use crate::bus::MemoryBus;
 use crate::register::Register;
 
+const CPU_CLOCK: usize = 4_000_000;
+
 pub struct Cpu {
     registers: Register,
     pc: u16,
