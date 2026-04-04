@@ -1,11 +1,35 @@
-pub struct TimerRegister {
-    div: u8,          // FF04
-    tima: u8,         // FF05
-    tma: u8,          // FF06
-    tac: u8,          // FF07
+pub enum Frequency {
+    ///~ 4096 Hz: 4_000_000/4096 = 1024 cycles
+    F4096 = 1024,
+    ///~ 262144 Hz: 4_000_000/262144 = 16 cycles
+    F262144 = 16,
+    ///~ 65536 Hz: 4_000_000/65536 = 64 cycles
+    F65536 = 64,
+    /// ~ 16384 Hz: 4_000_000/16384 = 256 cycles
+    F16384 = 256,
+}
 
+impl Frequency {
+    /// The number of CPU cycles that occur per tick of the clock.
+    /// = equal to #CPU-cycles per second (4194304 ~ 4.19 MHz) divided by timer frequency.
+    fn cycles_per_tick(&self) -> usize {
+        match self {
+            Frequency::F4096 => 1024,
+            Frequency::F16384 => 256,
+            Frequency::F262144 => 16,
+            Frequency::F65536 => 64,
+        }
+    }
+}
+
+pub struct TimerRegister {
+    div: u8,  // FF04
+    tima: u8, // FF05
+    tma: u8,  // FF06
+    tac: u8,  // FF07
+
+    frequency: Frequency,
     div_counter: u16,
-    tima_counter: u16,
 }
 
 impl TimerRegister {
@@ -16,8 +40,8 @@ impl TimerRegister {
             tma: 0,
             tac: 0,
 
+            frequency: Frequency::F4096,
             div_counter: 0,
-            tima_counter: 0,
         }
     }
 
@@ -57,30 +81,7 @@ impl TimerRegister {
     }
 
     pub fn step(&mut self, t_cycles: u32) -> bool {
-        let mut request_timer_interrupt = false;
-
-        self.div_counter = self.div_counter.wrapping_add(t_cycles as u16);
-        while self.div_counter >= 256 {
-            self.div_counter -= 256;
-            self.div = self.div.wrapping_add(1);
-        }
-
-        if (self.tac & 0x04) != 0 {
-            let period = self.timer_period();
-            self.tima_counter = self.tima_counter.wrapping_add(t_cycles as u16);
-
-            while self.tima_counter >= period {
-                self.tima_counter -= period;
-                let (next, overflow) = self.tima.overflowing_add(1);
-                if overflow {
-                    self.tima = self.tma;
-                    request_timer_interrupt = true;
-                } else {
-                    self.tima = next;
-                }
-            }
-        }
-
-        request_timer_interrupt
+        //TODO
+        false
     }
 }

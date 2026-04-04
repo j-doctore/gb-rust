@@ -1,6 +1,6 @@
-use crate::bus::MemoryBus;
-use crate::cartridge::Cartridge;
+use crate::membus::MemoryBus;
 use crate::cpu::Cpu;
+use crate::Cartridge;
 
 pub struct Emulator {
     cpu: Cpu,

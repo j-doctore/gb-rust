@@ -2,22 +2,16 @@ pub const IF_UNUSED_BITS_MASK: u8 = 0xE0;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum InterruptType {
-    VBlank,
-    LCDSTAT,
-    Timer,
-    Serial,
-    Joypad,
+    VBlank = 0,
+    LCDSTAT = 1,
+    Timer = 2,
+    Serial = 3,
+    Joypad = 4,
 }
 
 impl InterruptType {
     pub fn bit(self) -> u8 {
-        match self {
-            InterruptType::VBlank => 0,
-            InterruptType::LCDSTAT => 1,
-            InterruptType::Timer => 2,
-            InterruptType::Serial => 3,
-            InterruptType::Joypad => 4,
-        }
+        return self as u8;
     }
 
     pub fn mask(self) -> u8 {

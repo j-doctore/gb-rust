@@ -1,17 +1,7 @@
-mod bus;
-mod cartridge;
-mod cpu;
-mod emulator;
-mod ppu;
-mod register;
-mod timer;
-mod interrupts;
-mod joypad;
-
 use sdl2::{event::Event, keyboard::Keycode, pixels::Color, render::Canvas, video::Window, rect::Rect};
 use std::env::{self};
 
-use emulator::Emulator;
+use gb_rust::Emulator;
 const SCALING: u32 = 5;
 const SCREEN_WIDTH: u32 = 160;
 const SCREEN_HEIGHT: u32 = 144;
@@ -81,7 +71,6 @@ fn main() {
                 _ => {}
             }
         }
-        emu.run_cycles(CYCLES_PER_FRAME);
         draw_screen(&emu, &mut canvas)
     }
 }

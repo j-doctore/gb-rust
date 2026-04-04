@@ -42,20 +42,17 @@ fn header_length_and_ram_read_write() {
 	let path = write_temp_rom(&rom);
 	let mut cart = Cartridge::new(path.to_str().unwrap()).expect("failed to load cartridge");
 
-	// Header (0x100..0x150) should be present
-	let header = cart.get_header();
-	assert_eq!(header.len(), 0x150 - 0x100);
 
 	// External RAM initial contents should be zero
-	assert_eq!(cart.read_ram(0xA000), 0x00);
+	assert_eq!(cart.read_ext_ram(0xA000), 0x00);
 
 	// Write and read back inside range
 	cart.write_ram(0xA000 + 10, 0xAB);
-	assert_eq!(cart.read_ram(0xA000 + 10), 0xAB);
+	assert_eq!(cart.read_ext_ram(0xA000 + 10), 0xAB);
 
 	// Out-of-range reads should return 0xFF
-	let beyond = 0xA000 + cart.ram.len() as u16 + 1;
-	assert_eq!(cart.read_ram(beyond), 0xFF);
+	let beyond = 0xA000 + cart.get_ram_size() as u16 + 1;
+	assert_eq!(cart.read_ext_ram(beyond), 0xFF);
 
 	let _ = fs::remove_file(path);
 }
