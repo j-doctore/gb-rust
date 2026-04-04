@@ -32,6 +32,11 @@ impl MemoryBus {
         &self.ppu
     }
 
+    pub fn step(&mut self, cycles: u32) {
+        self.io.step(cycles);
+        //TODO: ppu step?
+    }
+
     pub fn press_input(&mut self, input: UserInput) {
         self.io.press_input(input);
     }

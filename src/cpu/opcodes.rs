@@ -274,7 +274,7 @@ pub fn execute(cpu: &mut super::Cpu, bus: &mut MemoryBus, opcode: u8) {
 			cpu.registers.set_flag_c(c);
 		}
 		0xF3 => cpu.ime = false,
-		0xFB => cpu.ei_pending = true,
+		0xFB => cpu.ei_delay = 2,
 
 		// ===== jumps / calls / returns =====
 		0x18 => {

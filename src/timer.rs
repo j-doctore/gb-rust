@@ -24,7 +24,8 @@ pub struct TimerRegister {
     tac: u8,  // FF07
 
     frequency: Frequency,
-    div_counter: u16,
+    div_counter: u32,
+    tima_counter: u32
 }
 
 impl TimerRegister {
@@ -37,6 +38,7 @@ impl TimerRegister {
 
             frequency: Frequency::F4096,
             div_counter: 0,
+            tima_counter: 0,
         }
     }
 
@@ -75,8 +77,7 @@ impl TimerRegister {
         }
     }
 
-    pub fn step(&mut self, t_cycles: u32) -> bool {
-        //TODO
+    pub fn step(&mut self, cycles: u32) -> bool {
         false
     }
 }

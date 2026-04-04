@@ -1,8 +1,9 @@
+use crate::interrupts::InterruptType;
 use crate::membus::MemoryBus;
-pub mod register;
-pub mod microops;
 pub mod alu;
+pub mod microops;
 pub mod opcodes;
+pub mod register;
 use crate::cpu::register::Register;
 
 pub struct Cpu {
@@ -10,7 +11,7 @@ pub struct Cpu {
     pc: u16,
     sp: u16,
     ime: bool,        //Interrupt Master Enable
-    ei_pending: bool, //EI delayed by one instruction, we need to track if pending
+    ei_delay: u8, //EI delayed by one instruction, we need to track if pending
     halted: bool,
     step_cycles: u32,
 }
@@ -22,7 +23,7 @@ impl Cpu {
             pc: 0x0100,
             sp: 0xFFFE,
             ime: false,
-            ei_pending: false,
+            ei_delay: 0,
             halted: false,
             step_cycles: 0,
         }
@@ -122,14 +123,46 @@ impl Cpu {
     pub fn step(&mut self, bus: &mut MemoryBus) -> u32 {
         self.step_cycles = 0;
 
+        let ie = self.read_byte(bus, 0xFFFF);
+        let if_f = self.read_byte(bus, 0xFF0F);
+
+        if self.halted && (ie & if_f) != 0 {
+            self.halted = false;
+        }
+
         if self.halted {
-                return self.step_cycles;
+            return self.step_cycles;
+        }
+
+        let pending = ie & if_f;
+        if pending != 0 {
+            if self.ime {
+                if let Some(i_req) = InterruptType::highest_priority_from_pending(pending) {
+                    self.service_interrupt(bus, i_req);
+                }
+            }
         }
 
         let opcode = self.fetch_byte(bus);
         crate::cpu::opcodes::execute(self, bus, opcode);
 
+        if self.ei_delay > 0 {
+            self.ei_delay -= 1;
+            if self.ei_delay == 0 {
+                self.ime = true;
+            }
+        }
+
         self.step_cycles
     }
 
+    fn service_interrupt(&mut self, bus: &mut MemoryBus, interrupt: InterruptType) {
+        self.ime = false;
+        self.push_u16(bus, self.pc);
+        let current_if_f = self.read_byte(bus, 0xFF0F);
+        self.write_byte(bus, 0xFF0F, current_if_f & !interrupt.mask());
+        self.pc = interrupt.vector();
+
+        //TODO: cycle cost
+    }
 }

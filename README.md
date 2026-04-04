@@ -26,10 +26,10 @@ A Gameboy Classic (DMG-01) emulator written in Rust which I am building for educ
 | B  | Left  |
 | Start  | Return  |
 | Select  | Backspace  |
-| Left  | A  |
-| Right  | D  |
 | Up  | W  |
+| Left  | A  |
 | Down  | S  |
+| Right  | D  |
 
 ## Goals
 * simple graphics/maybe UI

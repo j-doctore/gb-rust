@@ -1,5 +1,5 @@
 use crate::joypad::Joypad;
-use crate::interrupts::IF_UNUSED_BITS_MASK;
+use crate::interrupts::{IF_UNUSED_BITS_MASK, InterruptType};
 use crate::joypad::UserInput;
 use crate::timer::TimerRegister;
 
@@ -18,9 +18,15 @@ impl IoRegisters {
     pub fn new() -> Self {
         Self {
             joypad: Joypad::new(),
-            if_reg: 0,
+            if_reg: 0xE1,
             timers: TimerRegister::new(),
             io: [0; IO_SIZE],
+        }
+    }
+
+    pub fn step(&mut self, cycles: u32) {
+        if self.timers.step(cycles) {
+            self.if_reg = self.if_reg | InterruptType::Timer.mask();
         }
     }
 
