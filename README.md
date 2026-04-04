@@ -1,4 +1,4 @@
-# CHIP-8 Emulator written in Rust
+# Gameboy Classic Emulator written in Rust
 
 A Gameboy Classic (DMG-01) emulator written in Rust which I am building for educational purposes.
 
@@ -6,6 +6,7 @@ A Gameboy Classic (DMG-01) emulator written in Rust which I am building for educ
 
 ## minor Achievements:
 * Blargg: all CPU_instructions except Interrupts working
+* Controls should be working, test later once Screen is visible
 
 
 ## TODOs
@@ -13,14 +14,22 @@ A Gameboy Classic (DMG-01) emulator written in Rust which I am building for educ
 * clocking/cycling
 * PPU/ GRAPHICS
 * Banking
-* controls
 * Halt Bug, OAM-DMA, Blargg tests
 * Sound support
 * MBCs
 * refactor
 
 ## Controls:
-TODO
+| Button  | Keyboard |
+| ------------- | ------------- |
+| A  | Right  |
+| B  | Left  |
+| Start  | Return  |
+| Select  | Backspace  |
+| Left  | A  |
+| Right  | D  |
+| Up  | W  |
+| Down  | S  |
 
 ## Goals
 * simple graphics/maybe UI

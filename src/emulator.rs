@@ -1,5 +1,6 @@
 use crate::membus::MemoryBus;
 use crate::cpu::Cpu;
+use crate::joypad::UserInput;
 use crate::Cartridge;
 
 pub struct Emulator {
@@ -19,6 +20,14 @@ impl Emulator {
 
     pub fn tick(&mut self) -> u32 {
         self.cpu.step(&mut self.bus)
+    }
+
+    pub fn press_input(&mut self, input: UserInput) {
+        self.bus.press_input(input);
+    }
+
+    pub fn release_input(&mut self, input: UserInput) {
+        self.bus.release_input(input);
     }
 
     pub fn run_cycles(&mut self, cycles: u32) {

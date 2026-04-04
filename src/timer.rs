@@ -12,13 +12,8 @@ pub enum Frequency {
 impl Frequency {
     /// The number of CPU cycles that occur per tick of the clock.
     /// = equal to #CPU-cycles per second (4194304 ~ 4.19 MHz) divided by timer frequency.
-    fn cycles_per_tick(&self) -> usize {
-        match self {
-            Frequency::F4096 => 1024,
-            Frequency::F16384 => 256,
-            Frequency::F262144 => 16,
-            Frequency::F65536 => 64,
-        }
+    fn cycles_per_tick(self) -> usize {
+        self as usize
     }
 }
 

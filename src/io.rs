@@ -1,5 +1,6 @@
 use crate::joypad::Joypad;
-use crate::interrupts::{InterruptType, IF_UNUSED_BITS_MASK};
+use crate::interrupts::IF_UNUSED_BITS_MASK;
+use crate::joypad::UserInput;
 use crate::timer::TimerRegister;
 
 
@@ -48,5 +49,13 @@ impl IoRegisters {
                 }
             }
         }
+    }
+
+    pub fn press_input(&mut self, input: UserInput) {
+        self.joypad.press_button(input);
+    }
+
+    pub fn release_input(&mut self, input: UserInput) {
+        self.joypad.release_button(input);
     }
 }

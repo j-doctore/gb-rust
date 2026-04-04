@@ -1,4 +1,5 @@
 use crate::io::IoRegisters;
+use crate::joypad::UserInput;
 pub mod cartridge;
 use crate::membus::cartridge::Cartridge;
 use crate::ppu::Ppu;
@@ -29,6 +30,14 @@ impl MemoryBus {
 
     pub fn ppu(&self) -> &Ppu {
         &self.ppu
+    }
+
+    pub fn press_input(&mut self, input: UserInput) {
+        self.io.press_input(input);
+    }
+
+    pub fn release_input(&mut self, input: UserInput) {
+        self.io.release_input(input);
     }
 
     //TODO; BANKING, OAM DMA

@@ -2,10 +2,10 @@ use sdl2::{event::Event, keyboard::Keycode, pixels::Color, render::Canvas, video
 use std::env::{self};
 
 use gb_rust::Emulator;
+use gb_rust::joypad::UserInput;
 const SCALING: u32 = 5;
 const SCREEN_WIDTH: u32 = 160;
 const SCREEN_HEIGHT: u32 = 144;
-const CYCLES_PER_FRAME: u32 = 70_224;
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -68,10 +68,42 @@ fn main() {
                     keycode: Some(Keycode::Escape),
                     ..
                 } => break 'running,
+                Event::KeyDown {
+                    keycode: Some(key),
+                    repeat: false,
+                    ..
+                } => {
+                    if let Some(input) = map_keycode(key) {
+                        emu.press_input(input);
+                    }
+                }
+                Event::KeyUp {
+                    keycode: Some(key),
+                    repeat: false,
+                    ..
+                } => {
+                    if let Some(input) = map_keycode(key) {
+                        emu.release_input(input);
+                    }
+                }
                 _ => {}
             }
         }
         draw_screen(&emu, &mut canvas)
+    }
+}
+
+fn map_keycode(key: Keycode) -> Option<UserInput> {
+    match key {
+        Keycode::A => Some(UserInput::Left),
+        Keycode::D => Some(UserInput::Right),
+        Keycode::W => Some(UserInput::Up),
+        Keycode::S => Some(UserInput::Down),
+        Keycode::Right => Some(UserInput::A),
+        Keycode::Left => Some(UserInput::B),
+        Keycode::Return => Some(UserInput::Start),
+        Keycode::Backspace => Some(UserInput::Select),
+        _ => None,
     }
 }
 

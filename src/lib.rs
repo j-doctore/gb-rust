@@ -4,7 +4,7 @@ mod membus;
 mod cpu;
 
 mod interrupts;
-mod joypad;
+pub mod joypad;
 mod ppu;
 mod timer;
 mod io;
