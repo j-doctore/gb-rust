@@ -19,7 +19,9 @@ impl Emulator {
     }
 
     pub fn tick(&mut self) -> u32 {
-        self.cpu.step(&mut self.bus)
+        let cycles = self.cpu.step(&mut self.bus);
+        self.bus.step(cycles);
+        cycles
     }
 
     pub fn press_input(&mut self, input: UserInput) {

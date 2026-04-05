@@ -1,3 +1,5 @@
+const TAC_INC_TIMA_FLAG: u8 = 0b100;
+
 pub enum Frequency {
     ///~ 4096 Hz: 4_000_000/4096 = 1024 cycles
     F4096 = 1024,
@@ -25,7 +27,7 @@ pub struct TimerRegister {
 
     frequency: Frequency,
     div_counter: u32,
-    tima_counter: u32
+    tima_counter: u32,
 }
 
 impl TimerRegister {
@@ -67,7 +69,7 @@ impl TimerRegister {
         self.div = 0;
     }
 
-    fn timer_period(&self) -> u16 {
+    fn clock_frequency(&self) -> u16 {
         match self.tac & 0x03 {
             0x00 => 1024, //~ 4096 Hz: 4_000_000/4096 = 1024 cycles
             0x01 => 16,
@@ -77,7 +79,38 @@ impl TimerRegister {
         }
     }
 
+    fn tick_div(&mut self) {
+        self.div = self.div.wrapping_add(1);
+        self.div_counter += 1;
+
+        //TODO: tick at ~16Mhz
+        /*if self.div_counter >= 16Mhz
+        self.div_counter = 0
+        */
+    }
+
+    //tima_counter unused; is that right?
+    fn tick_tima(&mut self) -> bool{
+        let freguency = self.clock_frequency();
+        let mut interrupt_requested = false;
+        //Only increment TIMA if Enable is set
+        if self.tac & TAC_INC_TIMA_FLAG != 0 {
+            self.tima += 1
+        }
+
+        //TODO: tick at frequency specified by TAC
+        // proper overflow logic - i think >= is not sufficient;
+        if self.tima >= 0xFF {
+            self.tima = self.tma;
+            interrupt_requested = true;
+        }
+        interrupt_requested
+    }
+
+    //is this sufficient?
+    //cycles unused?
     pub fn step(&mut self, cycles: u32) -> bool {
-        false
+        self.tick_div();
+        self.tick_tima()
     }
 }

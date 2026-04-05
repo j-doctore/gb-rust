@@ -163,6 +163,6 @@ impl Cpu {
         self.write_byte(bus, 0xFF0F, current_if_f & !interrupt.mask());
         self.pc = interrupt.vector();
 
-        //TODO: cycle cost
+        //TODO: cycle cost = + 5 M-cycles?
     }
 }
