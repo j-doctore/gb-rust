@@ -4,6 +4,9 @@ const OAM_SIZE: usize = 0xA0; // FE00-FE9F (160 bytes)
 const SCREEN_HEIGHT: usize = 144;
 const SCREEN_WIDTH: usize = 160;
 
+const TILE_SIZE: usize = 8 * 8;
+const TILE_MAP_SIZE: usize = 32 * 32; //1024
+
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum Mode {
     HBlank = 0,
@@ -12,11 +15,16 @@ pub enum Mode {
     Transfer = 3,
 }
 
+type Tile = [u8; TILE_SIZE];
+
 pub struct Ppu {
     screen: [[u8; SCREEN_WIDTH]; SCREEN_HEIGHT],
 
     oam: [u8; OAM_SIZE],
     vram: [u8; VRAM_SIZE],
+    tile_data: [Tile; 384],         //0x8000-0x97FF
+    tile_map0: [u8; TILE_MAP_SIZE], //0x9800-0x9BFF
+    tile_map1: [u8; TILE_MAP_SIZE], //0x9C00-0x9FFF
 
     lcdc: u8, // FF40
     stat: u8, // FF41 (upper bits writable, lower bits mostly status)
@@ -24,9 +32,9 @@ pub struct Ppu {
     scx: u8,  // FF43
     ly: u8,   // FF44 (read-only from CPU POV)
     lyc: u8,  // FF45
-    bgp: u8,  // FF47
-    obp0: u8, // FF48
-    obp1: u8, // FF49
+    bgp: u8,  // FF47 Background Palette
+    obp0: u8, // FF48 OBJ0 Palette
+    obp1: u8, // FF49 OBJ1 Palette
     wy: u8,   // FF4A
     wx: u8,   // FF4B
 
@@ -39,6 +47,9 @@ impl Ppu {
             screen: [[0; SCREEN_WIDTH]; SCREEN_HEIGHT],
             oam: [0; OAM_SIZE],
             vram: [0; VRAM_SIZE],
+            tile_data: [[0; TILE_SIZE]; 384],
+            tile_map0: [0; TILE_MAP_SIZE],
+            tile_map1: [0; TILE_MAP_SIZE],
 
             lcdc: 0x91,
             stat: 0x85, // you can start with 0 and evolve; just be consistent
@@ -65,7 +76,14 @@ impl Ppu {
             // During pixel transfer, VRAM is inaccessible to the CPU
             return 0xFF;
         }
-        self.vram[addr]
+        //normalization of Address, becuz none in membus
+        //maybe improve
+        match addr {
+            0x8000..=0x97FF => self.vram[addr- 0x8000],
+            0x9800..=0x9BFF => self.tile_map0[addr-0x9800],
+            0x9C00..=0x9FFF => self.tile_map1[addr-0x9C00],
+            _ => 0xFF,
+        }
     }
 
     pub fn write_vram(&mut self, addr: usize, value: u8) {
@@ -73,8 +91,15 @@ impl Ppu {
             // During pixel transfer, VRAM is inaccessible to the CPU
             return;
         }
-        self.vram[addr] = value;
-    }
+        //normalization of Address, becuz none in membus
+        //maybe improve
+        match addr {
+            0x8000..=0x97FF => self.vram[addr - 0x8000] = value,
+            0x9800..=0x9BFF => {
+                self.tile_map0[addr- 0x9800] = value},
+            0x9C00..=0x9FFF => self.tile_map1[addr- 0x9C00] = value,
+            _ => unreachable!(),
+        }    }
 
     pub fn read_oam(&self, addr: usize) -> u8 {
         if self.mode == Mode::OamScan || self.mode == Mode::Transfer {
@@ -142,5 +167,4 @@ impl Ppu {
             _ => {}
         }
     }
-
 }

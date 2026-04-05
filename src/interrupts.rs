@@ -1,4 +1,4 @@
-pub const IF_UNUSED_BITS_MASK: u8 = 0xE0;
+pub const INTERRUPT_UNUSED_BITS_MASK: u8 = 0xE0;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum InterruptType {

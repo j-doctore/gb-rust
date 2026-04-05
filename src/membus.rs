@@ -53,7 +53,7 @@ impl MemoryBus {
             //16KiB ROM Bank
             0x4000..=0x7FFF => self.cartridge.read_rom(addr),
             //VRAM
-            0x8000..=0x9FFF => self.ppu.read_vram(addr as usize - 0x8000),
+            0x8000..=0x9FFF => self.ppu.read_vram(addr as usize),
             //8KiB External RAM?
             0xA000..=0xBFFF => self.cartridge.read_ext_ram(addr),
             //8KiB WRAM
@@ -64,13 +64,15 @@ impl MemoryBus {
             0xFE00..=0xFE9F => self.ppu.read_oam(addr as usize - 0xFE00),
 
             //IO Registers
-            0xFF00..=0xFF7F => {match addr & 0x00FF {
-                //
-                0x00..=0x3F => self.io.read_io_reg(addr),
-                //PPU Registers
-                0x40..=0x4B => self.ppu.read_reg(addr),
-                _ => self.io.read_io_reg(addr),
-            }},
+            0xFF00..=0xFF7F => {
+                match addr & 0x00FF {
+                    //
+                    0x00..=0x3F => self.io.read_io_reg(addr),
+                    //PPU Registers
+                    0x40..=0x4B => self.ppu.read_reg(addr),
+                    _ => self.io.read_io_reg(addr),
+                }
+            }
             //HRAM
             0xFF80..=0xFFFE => self.hram[addr as usize - 0xFF80],
             //Interrupt
@@ -85,7 +87,7 @@ impl MemoryBus {
             //==ROM Bank== IGNORE
             0x0000..=0x7FFF => (),
             //VRAM
-            0x8000..=0x9FFF => self.ppu.write_vram(addr as usize - 0x8000, value),
+            0x8000..=0x9FFF => self.ppu.write_vram(addr as usize, value),
             //8KiB External RAM?
             0xA000..=0xBFFF => self.cartridge.write_ram(addr, value),
             //8KiB WRAM
@@ -104,7 +106,7 @@ impl MemoryBus {
                     0x40..=0x4B => self.ppu.write_reg(addr, value),
                     _ => self.io.write_io(addr, value),
                 }
-            },
+            }
 
             //HRAM
             0xFF80..=0xFFFE => self.hram[addr as usize - 0xFF80] = value,

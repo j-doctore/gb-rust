@@ -1,5 +1,5 @@
 use crate::joypad::Joypad;
-use crate::interrupts::{IF_UNUSED_BITS_MASK, InterruptType};
+use crate::interrupts::{INTERRUPT_UNUSED_BITS_MASK, InterruptType};
 use crate::joypad::UserInput;
 use crate::timer::TimerRegister;
 
@@ -33,7 +33,7 @@ impl IoRegisters {
     pub fn read_io_reg(&self, addr: u16) -> u8 {
         match addr & 0x00FF {
             0x00 => self.joypad.read(),
-            0x0F => self.if_reg | IF_UNUSED_BITS_MASK,
+            0x0F => self.if_reg | INTERRUPT_UNUSED_BITS_MASK,
             0x04..=0x07 => self.timers.read_byte(addr),
             //TODO
             _ => self.io[addr as usize - 0xFF00],
