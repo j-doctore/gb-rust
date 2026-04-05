@@ -1,23 +1,5 @@
 const TAC_INC_TIMA_FLAG: u8 = 0b100;
 
-pub enum Frequency {
-    ///~ 4096 Hz: 4_000_000/4096 = 1024 cycles
-    F4096 = 1024,
-    ///~ 262144 Hz: 4_000_000/262144 = 16 cycles
-    F262144 = 16,
-    ///~ 65536 Hz: 4_000_000/65536 = 64 cycles
-    F65536 = 64,
-    /// ~ 16384 Hz: 4_000_000/16384 = 256 cycles
-    F16384 = 256,
-}
-
-impl Frequency {
-    /// The number of CPU cycles that occur per tick of the clock.
-    /// = equal to #CPU-cycles per second (4194304 ~ 4.19 MHz) divided by timer frequency.
-    fn cycles_per_tick(self) -> usize {
-        self as usize
-    }
-}
 
 pub struct TimerRegister {
     div: u8,  // FF04
@@ -25,7 +7,6 @@ pub struct TimerRegister {
     tma: u8,  // FF06
     tac: u8,  // FF07
 
-    frequency: Frequency,
     div_counter: u32,
     tima_counter: u32,
 }
@@ -38,7 +19,6 @@ impl TimerRegister {
             tma: 0,
             tac: 0,
 
-            frequency: Frequency::F4096,
             div_counter: 0,
             tima_counter: 0,
         }
@@ -69,6 +49,9 @@ impl TimerRegister {
         self.div = 0;
     }
 
+
+    /// The number of CPU cycles that occur per tick of the clock.
+    /// = equal to #CPU-cycles per second (4194304 ~ 4.19 MHz) divided by timer frequency.
     fn clock_frequency(&self) -> u16 {
         match self.tac & 0x03 {
             0x00 => 1024, //~ 4096 Hz: 4_000_000/4096 = 1024 cycles
