@@ -1,7 +1,9 @@
 use crate::io::IoRegisters;
+use crate::interrupts::InterruptType;
 use crate::joypad::UserInput;
-pub mod cartridge;
-use crate::membus::cartridge::Cartridge;
+
+mod cartridge;
+pub use self::cartridge::Cartridge;
 use crate::ppu::Ppu;
 const WRAM_SIZE: usize = 1024 * 8; //8KiB
 const HRAM_SIZE: usize = 0x7F; // FF80-FFFE (127 bytes)
@@ -34,7 +36,14 @@ impl MemoryBus {
 
     pub fn step(&mut self, cycles: u32) {
         self.io.step(cycles);
-        //TODO: ppu step?
+
+        let (entered_vblank, entered_stat_irq) = self.ppu.step(cycles);
+        if entered_vblank {
+            self.io.request_interrupt(InterruptType::VBlank);
+        }
+        if entered_stat_irq {
+            self.io.request_interrupt(InterruptType::LCDSTAT);
+        }
     }
 
     pub fn press_input(&mut self, input: UserInput) {

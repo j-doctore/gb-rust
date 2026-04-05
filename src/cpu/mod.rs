@@ -1,10 +1,10 @@
 use crate::interrupts::InterruptType;
 use crate::membus::MemoryBus;
-pub mod alu;
-pub mod microops;
-pub mod opcodes;
-pub mod register;
-use crate::cpu::register::Register;
+mod alu;
+mod microops;
+mod opcodes;
+mod register;
+use self::register::Register;
 
 pub struct Cpu {
     registers: Register,

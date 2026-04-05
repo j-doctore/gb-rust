@@ -10,4 +10,4 @@ mod timer;
 mod io;
 
 pub use emulator::Emulator;
-pub use membus::cartridge::Cartridge;
+pub use membus::Cartridge;

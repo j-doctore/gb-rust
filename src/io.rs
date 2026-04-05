@@ -26,7 +26,7 @@ impl IoRegisters {
 
     pub fn step(&mut self, cycles: u32) {
         if self.timers.step(cycles) {
-            self.if_reg = self.if_reg | InterruptType::Timer.mask();
+            self.request_interrupt(InterruptType::Timer);
         }
     }
 
@@ -63,5 +63,9 @@ impl IoRegisters {
 
     pub fn release_input(&mut self, input: UserInput) {
         self.joypad.release_button(input);
+    }
+
+    pub fn request_interrupt(&mut self, interrupt: InterruptType) {
+        self.if_reg |= interrupt.mask();
     }
 }
