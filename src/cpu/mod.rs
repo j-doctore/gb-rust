@@ -13,10 +13,20 @@ pub struct Cpu {
     ime: bool,        //Interrupt Master Enable
     ei_delay: u8, //EI delayed by one instruction, we need to track if pending
     halted: bool,
+    halt_bug: bool,
     step_cycles: u32,
+    stepped_cycles: u32,
 }
 
 impl Cpu {
+    pub fn pc(&self) -> u16 {
+        self.pc
+    }
+
+    pub fn a(&self) -> u8 {
+        self.registers.get_a()
+    }
+
     pub fn new() -> Self {
         Self {
             registers: Register::new(),
@@ -25,16 +35,27 @@ impl Cpu {
             ime: false,
             ei_delay: 0,
             halted: false,
+            halt_bug: false,
             step_cycles: 0,
+            stepped_cycles: 0,
         }
     }
 
     fn read_byte(&mut self, bus: &mut MemoryBus, addr: u16) -> u8 {
-        bus.read_byte(addr)
+        let value = bus.read_byte(addr);
+        let cycles = microops::bus_access();
+        self.step_cycles = self.step_cycles.saturating_add(cycles);
+        bus.step(cycles);
+        self.stepped_cycles = self.stepped_cycles.saturating_add(cycles);
+        value
     }
 
     fn write_byte(&mut self, bus: &mut MemoryBus, addr: u16, val: u8) {
+        let cycles = microops::bus_access();
+        self.step_cycles = self.step_cycles.saturating_add(cycles);
         bus.write_byte(addr, val);
+        bus.step(cycles);
+        self.stepped_cycles = self.stepped_cycles.saturating_add(cycles);
     }
 
     fn fetch_byte(&mut self, bus: &mut MemoryBus) -> u8 {
@@ -43,6 +64,49 @@ impl Cpu {
         self.pc = self.pc.wrapping_add(1);
 
         byte
+    }
+
+    fn fetch_opcode(&mut self, bus: &mut MemoryBus) -> u8 {
+        let byte = self.read_byte(bus, self.pc);
+        if self.halt_bug {
+            // HALT bug: next opcode is fetched without incrementing PC once.
+            self.halt_bug = false;
+        } else {
+            self.pc = self.pc.wrapping_add(1);
+        }
+        byte
+    }
+
+    fn enter_halt(&mut self, bus: &MemoryBus) {
+        let pending = bus.read_byte(0xFFFF) & bus.read_byte(0xFF0F) & 0x1F;
+
+        if self.ime {
+            self.halted = true;
+            self.halt_bug = false;
+            return;
+        }
+
+        if pending != 0 {
+            // IME=0 and pending interrupt triggers HALT bug.
+            self.halted = false;
+            self.halt_bug = true;
+        } else {
+            self.halted = true;
+            self.halt_bug = false;
+        }
+    }
+
+    fn add_internal_m_cycles(&mut self, m_cycles: u32) {
+        let cycles = microops::m_cycles(m_cycles);
+        self.step_cycles = self.step_cycles.saturating_add(cycles);
+    }
+
+    fn finalize_step_cycles(&mut self, bus: &mut MemoryBus) {
+        if self.step_cycles > self.stepped_cycles {
+            let remaining = self.step_cycles - self.stepped_cycles;
+            bus.step(remaining);
+            self.stepped_cycles = self.step_cycles;
+        }
     }
 
     fn push_u8(&mut self, bus: &mut MemoryBus, val: u8) {
@@ -122,28 +186,32 @@ impl Cpu {
     //TODO: interrupts, halting, and add timers
     pub fn step(&mut self, bus: &mut MemoryBus) -> u32 {
         self.step_cycles = 0;
+        self.stepped_cycles = 0;
 
-        let ie = self.read_byte(bus, 0xFFFF);
-        let if_f = self.read_byte(bus, 0xFF0F);
-
-        if self.halted && (ie & if_f) != 0 {
-            self.halted = false;
-        }
+        let ie = bus.read_byte(0xFFFF);
+        let if_f = bus.read_byte(0xFF0F);
+        let pending = ie & if_f;
 
         if self.halted {
-            return self.step_cycles;
-        }
-
-        let pending = ie & if_f;
-        if pending != 0 {
-            if self.ime {
-                if let Some(i_req) = InterruptType::highest_priority_from_pending(pending) {
-                    self.service_interrupt(bus, i_req);
-                }
+            if pending != 0 {
+                self.halted = false;
+            } else {
+                self.step_cycles = microops::halt_idle();
+                bus.step(self.step_cycles);
+                self.stepped_cycles = self.step_cycles;
+                return self.step_cycles;
             }
         }
 
-        let opcode = self.fetch_byte(bus);
+        if pending != 0 && self.ime {
+            if let Some(i_req) = InterruptType::highest_priority_from_pending(pending) {
+                self.service_interrupt(bus, i_req);
+                self.finalize_step_cycles(bus);
+                return self.step_cycles;
+            }
+        }
+
+    let opcode = self.fetch_opcode(bus);
         crate::cpu::opcodes::execute(self, bus, opcode);
 
         if self.ei_delay > 0 {
@@ -152,6 +220,8 @@ impl Cpu {
                 self.ime = true;
             }
         }
+
+        self.finalize_step_cycles(bus);
 
         self.step_cycles
     }
@@ -162,7 +232,7 @@ impl Cpu {
         let current_if_f = self.read_byte(bus, 0xFF0F);
         self.write_byte(bus, 0xFF0F, current_if_f & !interrupt.mask());
         self.pc = interrupt.vector();
-
-        //TODO: cycle cost = + 5 M-cycles?
+        // Interrupt service costs 5 M-cycles total; push/read/write account for 4, add 1 internal.
+        self.add_internal_m_cycles(1);
     }
 }

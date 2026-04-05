@@ -3,7 +3,7 @@ pub const INTERRUPT_UNUSED_BITS_MASK: u8 = 0xE0;
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum InterruptType {
     VBlank = 0,
-    LCDSTAT = 1,
+    LcdStat = 1,
     Timer = 2,
     Serial = 3,
     Joypad = 4,
@@ -11,7 +11,7 @@ pub enum InterruptType {
 
 impl InterruptType {
     pub fn bit(self) -> u8 {
-        return self as u8;
+        self as u8
     }
 
     pub fn mask(self) -> u8 {
@@ -21,7 +21,7 @@ impl InterruptType {
     pub fn vector(self) -> u16 {
         match self {
             InterruptType::VBlank => 0x40,
-            InterruptType::LCDSTAT => 0x48,
+            InterruptType::LcdStat => 0x48,
             InterruptType::Timer => 0x50,
             InterruptType::Serial => 0x58,
             InterruptType::Joypad => 0x60,
@@ -31,7 +31,7 @@ impl InterruptType {
     pub fn from_bit(bit: u8) -> Option<Self> {
         match bit {
             0 => Some(InterruptType::VBlank),
-            1 => Some(InterruptType::LCDSTAT),
+            1 => Some(InterruptType::LcdStat),
             2 => Some(InterruptType::Timer),
             3 => Some(InterruptType::Serial),
             4 => Some(InterruptType::Joypad),

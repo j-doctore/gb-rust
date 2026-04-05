@@ -7,7 +7,7 @@ pub fn execute(cpu: &mut super::Cpu, bus: &mut MemoryBus, opcode: u8) {
 		// ===== 8-bit load =====
 		0x40..=0x7F => {
 			if opcode == 0x76 {
-				cpu.halted = true;
+				cpu.enter_halt(bus);
 			} else {
 				let dst = (opcode >> 3) & 0x07;
 				let src = opcode & 0x07;
@@ -109,12 +109,28 @@ pub fn execute(cpu: &mut super::Cpu, bus: &mut MemoryBus, opcode: u8) {
 			let c = ((sp & 0x00FF) + (e_u & 0x00FF)) > 0x00FF;
 			cpu.registers.set_hl((sp as i32 + e8 as i32) as u16);
 			cpu.set_flags(false, false, h, c);
+			cpu.add_internal_m_cycles(1);
 		}
-		0xF9 => cpu.sp = cpu.registers.get_hl(),
-		0xC5 => cpu.push_u16(bus, cpu.registers.get_bc()),
-		0xD5 => cpu.push_u16(bus, cpu.registers.get_de()),
-		0xE5 => cpu.push_u16(bus, cpu.registers.get_hl()),
-		0xF5 => cpu.push_u16(bus, cpu.registers.get_af()),
+		0xF9 => {
+			cpu.sp = cpu.registers.get_hl();
+			cpu.add_internal_m_cycles(1);
+		}
+		0xC5 => {
+			cpu.push_u16(bus, cpu.registers.get_bc());
+			cpu.add_internal_m_cycles(1);
+		}
+		0xD5 => {
+			cpu.push_u16(bus, cpu.registers.get_de());
+			cpu.add_internal_m_cycles(1);
+		}
+		0xE5 => {
+			cpu.push_u16(bus, cpu.registers.get_hl());
+			cpu.add_internal_m_cycles(1);
+		}
+		0xF5 => {
+			cpu.push_u16(bus, cpu.registers.get_af());
+			cpu.add_internal_m_cycles(1);
+		}
 		0xC1 => {
 			let v = cpu.pop_u16(bus);
 			cpu.registers.set_bc(v);
@@ -194,27 +210,57 @@ pub fn execute(cpu: &mut super::Cpu, bus: &mut MemoryBus, opcode: u8) {
 		}
 
 		// ===== 16-bit ALU =====
-		0x03 => cpu.registers.set_bc(cpu.registers.get_bc().wrapping_add(1)),
-		0x13 => cpu.registers.set_de(cpu.registers.get_de().wrapping_add(1)),
-		0x23 => cpu.registers.set_hl(cpu.registers.get_hl().wrapping_add(1)),
-		0x33 => cpu.sp = cpu.sp.wrapping_add(1),
-		0x0B => cpu.registers.set_bc(cpu.registers.get_bc().wrapping_sub(1)),
-		0x1B => cpu.registers.set_de(cpu.registers.get_de().wrapping_sub(1)),
-		0x2B => cpu.registers.set_hl(cpu.registers.get_hl().wrapping_sub(1)),
-		0x3B => cpu.sp = cpu.sp.wrapping_sub(1),
+		0x03 => {
+			cpu.registers.set_bc(cpu.registers.get_bc().wrapping_add(1));
+			cpu.add_internal_m_cycles(1);
+		}
+		0x13 => {
+			cpu.registers.set_de(cpu.registers.get_de().wrapping_add(1));
+			cpu.add_internal_m_cycles(1);
+		}
+		0x23 => {
+			cpu.registers.set_hl(cpu.registers.get_hl().wrapping_add(1));
+			cpu.add_internal_m_cycles(1);
+		}
+		0x33 => {
+			cpu.sp = cpu.sp.wrapping_add(1);
+			cpu.add_internal_m_cycles(1);
+		}
+		0x0B => {
+			cpu.registers.set_bc(cpu.registers.get_bc().wrapping_sub(1));
+			cpu.add_internal_m_cycles(1);
+		}
+		0x1B => {
+			cpu.registers.set_de(cpu.registers.get_de().wrapping_sub(1));
+			cpu.add_internal_m_cycles(1);
+		}
+		0x2B => {
+			cpu.registers.set_hl(cpu.registers.get_hl().wrapping_sub(1));
+			cpu.add_internal_m_cycles(1);
+		}
+		0x3B => {
+			cpu.sp = cpu.sp.wrapping_sub(1);
+			cpu.add_internal_m_cycles(1);
+		}
 		0x09 => {
 			let v = cpu.registers.get_bc();
 			alu_ops::add_hl(&mut cpu.registers, v);
+			cpu.add_internal_m_cycles(1);
 		}
 		0x19 => {
 			let v = cpu.registers.get_de();
 			alu_ops::add_hl(&mut cpu.registers, v);
+			cpu.add_internal_m_cycles(1);
 		}
 		0x29 => {
 			let v = cpu.registers.get_hl();
 			alu_ops::add_hl(&mut cpu.registers, v);
+			cpu.add_internal_m_cycles(1);
 		}
-		0x39 => alu_ops::add_hl(&mut cpu.registers, cpu.sp),
+		0x39 => {
+			alu_ops::add_hl(&mut cpu.registers, cpu.sp);
+			cpu.add_internal_m_cycles(1);
+		}
 		0xE8 => {
 			let e8 = cpu.imm8(bus) as i8;
 			let sp = cpu.sp;
@@ -223,6 +269,7 @@ pub fn execute(cpu: &mut super::Cpu, bus: &mut MemoryBus, opcode: u8) {
 			let c = ((sp & 0x00FF) + (e_u & 0x00FF)) > 0x00FF;
 			cpu.sp = (sp as i32 + e8 as i32) as u16;
 			cpu.set_flags(false, false, h, c);
+			cpu.add_internal_m_cycles(2);
 		}
 
 		// ===== rotates / misc =====
@@ -279,55 +326,67 @@ pub fn execute(cpu: &mut super::Cpu, bus: &mut MemoryBus, opcode: u8) {
 		// ===== jumps / calls / returns =====
 		0x18 => {
 			let e = cpu.imm8(bus) as i8;
+			cpu.add_internal_m_cycles(1);
 			jr(cpu, e);
 		}
 		0x20 => {
 			let e = cpu.imm8(bus) as i8;
 			if !cpu.registers.flag_z() {
+				cpu.add_internal_m_cycles(1);
                 jr(cpu, e);
 			}
 		}
 		0x28 => {
 			let e = cpu.imm8(bus) as i8;
 			if cpu.registers.flag_z() {
+				cpu.add_internal_m_cycles(1);
 				jr(cpu, e);
 			}
 		}
 		0x30 => {
 			let e = cpu.imm8(bus) as i8;
 			if !cpu.registers.flag_c() {
+				cpu.add_internal_m_cycles(1);
 				jr(cpu, e);
 			}
 		}
 		0x38 => {
 			let e = cpu.imm8(bus) as i8;
 			if cpu.registers.flag_c() {
+				cpu.add_internal_m_cycles(1);
 				jr(cpu, e);
 			}
 		}
-		0xC3 => cpu.pc = cpu.imm16(bus),
+		0xC3 => {
+			cpu.pc = cpu.imm16(bus);
+			cpu.add_internal_m_cycles(1);
+		}
 		0xC2 => {
 			let addr = cpu.imm16(bus);
 			if !cpu.registers.flag_z() {
 				cpu.pc = addr;
+				cpu.add_internal_m_cycles(1);
 			}
 		}
 		0xCA => {
 			let addr = cpu.imm16(bus);
 			if cpu.registers.flag_z() {
 				cpu.pc = addr;
+				cpu.add_internal_m_cycles(1);
 			}
 		}
 		0xD2 => {
 			let addr = cpu.imm16(bus);
 			if !cpu.registers.flag_c() {
 				cpu.pc = addr;
+				cpu.add_internal_m_cycles(1);
 			}
 		}
 		0xDA => {
 			let addr = cpu.imm16(bus);
 			if cpu.registers.flag_c() {
 				cpu.pc = addr;
+				cpu.add_internal_m_cycles(1);
 			}
 		}
 		0xE9 => cpu.pc = cpu.registers.get_hl(),
@@ -336,6 +395,7 @@ pub fn execute(cpu: &mut super::Cpu, bus: &mut MemoryBus, opcode: u8) {
 			let ret = cpu.pc;
 			cpu.push_u16(bus, ret);
 			cpu.pc = addr;
+			cpu.add_internal_m_cycles(1);
 		}
 		0xC4 => {
 			let addr = cpu.imm16(bus);
@@ -343,6 +403,7 @@ pub fn execute(cpu: &mut super::Cpu, bus: &mut MemoryBus, opcode: u8) {
 				let ret = cpu.pc;
 				cpu.push_u16(bus, ret);
 				cpu.pc = addr;
+				cpu.add_internal_m_cycles(1);
 			}
 		}
 		0xCC => {
@@ -351,6 +412,7 @@ pub fn execute(cpu: &mut super::Cpu, bus: &mut MemoryBus, opcode: u8) {
 				let ret = cpu.pc;
 				cpu.push_u16(bus, ret);
 				cpu.pc = addr;
+				cpu.add_internal_m_cycles(1);
 			}
 		}
 		0xD4 => {
@@ -359,6 +421,7 @@ pub fn execute(cpu: &mut super::Cpu, bus: &mut MemoryBus, opcode: u8) {
 				let ret = cpu.pc;
 				cpu.push_u16(bus, ret);
 				cpu.pc = addr;
+				cpu.add_internal_m_cycles(1);
 			}
 		}
 		0xDC => {
@@ -367,31 +430,44 @@ pub fn execute(cpu: &mut super::Cpu, bus: &mut MemoryBus, opcode: u8) {
 				let ret = cpu.pc;
 				cpu.push_u16(bus, ret);
 				cpu.pc = addr;
+				cpu.add_internal_m_cycles(1);
 			}
 		}
-		0xC9 => cpu.pc = cpu.pop_u16(bus),
+		0xC9 => {
+			cpu.pc = cpu.pop_u16(bus);
+			cpu.add_internal_m_cycles(1);
+		}
 		0xD9 => {
 			cpu.pc = cpu.pop_u16(bus);
 			cpu.ime = true;
+			cpu.add_internal_m_cycles(1);
 		}
 		0xC0 => {
+			cpu.add_internal_m_cycles(1);
 			if !cpu.registers.flag_z() {
 				cpu.pc = cpu.pop_u16(bus);
+				cpu.add_internal_m_cycles(1);
 			}
 		}
 		0xC8 => {
+			cpu.add_internal_m_cycles(1);
 			if cpu.registers.flag_z() {
 				cpu.pc = cpu.pop_u16(bus);
+				cpu.add_internal_m_cycles(1);
 			}
 		}
 		0xD0 => {
+			cpu.add_internal_m_cycles(1);
 			if !cpu.registers.flag_c() {
 				cpu.pc = cpu.pop_u16(bus);
+				cpu.add_internal_m_cycles(1);
 			}
 		}
 		0xD8 => {
+			cpu.add_internal_m_cycles(1);
 			if cpu.registers.flag_c() {
 				cpu.pc = cpu.pop_u16(bus);
+				cpu.add_internal_m_cycles(1);
 			}
 		}
 		0xC7 => rst(cpu, bus, 0x00),
@@ -421,6 +497,7 @@ fn rst(cpu: &mut super::Cpu, bus: &mut MemoryBus, addr: u16) {
 	let ret = cpu.pc;
 	cpu.push_u16(bus, ret);
 	cpu.pc = addr;
+	cpu.add_internal_m_cycles(1);
 }
 
 pub fn exec_cb(cpu: &mut super::Cpu, bus: &mut MemoryBus, opcode: u8) {
@@ -452,7 +529,7 @@ pub fn exec_cb(cpu: &mut super::Cpu, bus: &mut MemoryBus, opcode: u8) {
 				}
 				4 => (value << 1, (value & 0x80) != 0),
 				5 => ((value >> 1) | (value & 0x80), (value & 0x01) != 0),
-				6 => ((value >> 4) | (value << 4), false),
+				6 => (value.rotate_left(4), false),
 				7 => (value >> 1, (value & 0x01) != 0),
 				_ => unreachable!(),
 			};

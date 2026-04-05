@@ -6,6 +6,7 @@ use gb_rust::joypad::UserInput;
 const SCALING: u32 = 5;
 const SCREEN_WIDTH: u32 = 160;
 const SCREEN_HEIGHT: u32 = 144;
+const CYCLES_PER_FRAME: u32 = 70_224;
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -89,6 +90,7 @@ fn main() {
                 _ => {}
             }
         }
+        emu.run_cycles(CYCLES_PER_FRAME);
         draw_screen(&emu, &mut canvas)
     }
 }

@@ -1,14 +1,13 @@
 const TAC_INC_TIMA_FLAG: u8 = 0b100;
 
-
 pub struct TimerRegister {
-    div: u8,  // FF04
+    div: u8,  // FF04 (upper 8 bits of internal divider)
     tima: u8, // FF05
     tma: u8,  // FF06
     tac: u8,  // FF07
 
-    div_counter: u32,
-    tima_counter: u32,
+    div_counter: u16,
+    irq_pending: bool,
 }
 
 impl TimerRegister {
@@ -20,7 +19,7 @@ impl TimerRegister {
             tac: 0,
 
             div_counter: 0,
-            tima_counter: 0,
+            irq_pending: false,
         }
     }
 
@@ -39,61 +38,86 @@ impl TimerRegister {
             0xFF04 => self.reset_div(),
             0xFF05 => self.tima = val,
             0xFF06 => self.tma = val,
-            0xFF07 => self.tac = val & 0x07,
+            0xFF07 => self.set_tac(val & 0x07),
             _ => unreachable!(),
         }
     }
 
     fn reset_div(&mut self) {
+        let old_signal = self.timer_input_signal();
+
         self.div_counter = 0;
         self.div = 0;
+
+        let new_signal = self.timer_input_signal();
+        if old_signal && !new_signal && self.increment_tima() {
+            self.irq_pending = true;
+        }
     }
 
-
-    /// The number of CPU cycles that occur per tick of the clock.
-    /// = equal to #CPU-cycles per second (4194304 ~ 4.19 MHz) divided by timer frequency.
-    fn clock_frequency(&self) -> u16 {
+    fn selected_div_bit(&self) -> u8 {
         match self.tac & 0x03 {
-            0x00 => 1024, //~ 4096 Hz: 4_000_000/4096 = 1024 cycles
-            0x01 => 16,
-            0x02 => 64,
-            0x03 => 256,
+            0x00 => 9,
+            0x01 => 3,
+            0x02 => 5,
+            0x03 => 7,
             _ => unreachable!(),
         }
     }
 
-    fn tick_div(&mut self) {
-        self.div = self.div.wrapping_add(1);
-        self.div_counter += 1;
-
-        //TODO: tick at ~16Mhz
-        /*if self.div_counter >= 16Mhz
-        self.div_counter = 0
-        */
+    fn timer_enabled(&self) -> bool {
+        self.tac & TAC_INC_TIMA_FLAG != 0
     }
 
-    //tima_counter unused; is that right?
-    fn tick_tima(&mut self) -> bool{
-        let freguency = self.clock_frequency();
-        let mut interrupt_requested = false;
-        //Only increment TIMA if Enable is set
-        if self.tac & TAC_INC_TIMA_FLAG != 0 {
-            self.tima += 1
+    fn timer_input_signal(&self) -> bool {
+        if !self.timer_enabled() {
+            return false;
         }
 
-        //TODO: tick at frequency specified by TAC
-        // proper overflow logic - i think >= is not sufficient;
-        if self.tima >= 0xFF {
+        let bit = self.selected_div_bit();
+        ((self.div_counter >> bit) & 1) != 0
+    }
+
+    fn set_tac(&mut self, new_tac: u8) {
+        let old_signal = self.timer_input_signal();
+        self.tac = new_tac;
+        let new_signal = self.timer_input_signal();
+
+        if old_signal && !new_signal && self.increment_tima() {
+            self.irq_pending = true;
+        }
+    }
+
+    fn increment_tima(&mut self) -> bool {
+        let (next_tima, overflowed) = self.tima.overflowing_add(1);
+        if overflowed {
             self.tima = self.tma;
-            interrupt_requested = true;
+            true
+        } else {
+            self.tima = next_tima;
+            false
         }
-        interrupt_requested
     }
 
-    //is this sufficient?
-    //cycles unused?
+    fn tick_once(&mut self) -> bool {
+        let old_signal = self.timer_input_signal();
+        self.div_counter = self.div_counter.wrapping_add(1);
+        self.div = (self.div_counter >> 8) as u8;
+        let new_signal = self.timer_input_signal();
+
+        old_signal && !new_signal && self.increment_tima()
+    }
+
     pub fn step(&mut self, cycles: u32) -> bool {
-        self.tick_div();
-        self.tick_tima()
+        let mut interrupt_requested = self.irq_pending;
+        self.irq_pending = false;
+
+        for _ in 0..cycles {
+            if self.tick_once() {
+                interrupt_requested = true;
+            }
+        }
+
+        interrupt_requested
     }
 }

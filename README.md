@@ -5,13 +5,17 @@ A Gameboy Classic (DMG-01) emulator written in Rust which I am building for educ
 ## Features:
 
 ## minor Achievements:
-* Blargg: all CPU_instructions except Interrupts working
-* Controls should be working, test later once Screen is visible
+* | passed Blargg Tests |  
+| cpu_instr  |
+| instr_timing  |
+| mem_timing  |
+| mem_timing-2  |
+| halt_bug  |
+* Controls are working
+* we got Tetris working!
 
 
 ## TODOs
-* INTERRUPTS
-* clocking/cycling
 * PPU/ GRAPHICS
 * Banking
 * Halt Bug, OAM-DMA, Blargg tests
@@ -36,7 +40,7 @@ A Gameboy Classic (DMG-01) emulator written in Rust which I am building for educ
 * be close to Hardware emulation
 * pass many Blargg-Tests (for DMG, no CGB), maybe some from Mooneye
 * Sound-Support?
-* real Games: get at least Tetris and Pokemon working
+* real Games: get at least Tetris, Warioland or Pokemon working
 
 ## Limitations | What will not be covered
 * no Serial Data support

@@ -14,7 +14,7 @@ pub struct Register {
 impl Register {
     pub fn new() -> Self {
         Register {
-            a: 0,
+            a: 0x11,
             b: 0,
             c: 0,
             d: 0,
@@ -22,7 +22,7 @@ impl Register {
             h: 0,
             l: 0,
 
-            f: 0,
+            f: 0x80,
         }
     }
 

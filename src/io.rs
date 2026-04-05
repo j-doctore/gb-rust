@@ -12,6 +12,7 @@ pub struct IoRegisters {
     
     if_reg: u8,
     io: [u8; IO_SIZE],
+    serial_out: String,
 }
 
 impl IoRegisters {
@@ -21,6 +22,7 @@ impl IoRegisters {
             if_reg: 0xE1,
             timers: TimerRegister::new(),
             io: [0; IO_SIZE],
+            serial_out: String::new(),
         }
     }
 
@@ -51,10 +53,15 @@ impl IoRegisters {
                 //DEBUG BLARGG:
                 if addr == 0xFF02 && value == 0x81 {
                     let c = self.io[0x01] as char;
+                    self.serial_out.push(c);
                     print!("{}", c);
                 }
             }
         }
+    }
+
+    pub fn serial_output(&self) -> &str {
+        &self.serial_out
     }
 
     pub fn press_input(&mut self, input: UserInput) {

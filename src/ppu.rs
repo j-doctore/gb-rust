@@ -5,6 +5,8 @@ const SCREEN_HEIGHT: usize = 144;
 const SCREEN_WIDTH: usize = 160;
 
 const TILE_SIZE: usize = 8 * 8;
+const BG_MAP0_OFFSET: usize = 0x1800; // 0x9800 - 0x8000
+const BG_MAP1_OFFSET: usize = 0x1C00; // 0x9C00 - 0x8000
 
 const CYCLES_OAM_SCAN: u32 = 80;
 const CYCLES_TRANSFER: u32 = 172;
@@ -41,6 +43,7 @@ pub struct Ppu {
     obp1: u8, // FF49 OBJ1 Palette
     wy: u8,   // FF4A
     wx: u8,   // FF4B
+    dma: u8,  // FF46 (DMA source high byte)
 
     mode: Mode,
     mode_cycles: u32,
@@ -65,6 +68,7 @@ impl Ppu {
             obp1: 0xFF,
             wy: 0,
             wx: 0,
+            dma: 0xFF,
 
             mode: Mode::OamScan,
             mode_cycles: 0,
@@ -131,7 +135,7 @@ impl Ppu {
     // Update the decoded pixels for the tile row affected by a VRAM write at `addr`.
     // `addr` is the full GameBoy address in range 0x8000..=0x97FF.
     fn update_tile_from_vram(&mut self, addr: usize) {
-        if addr < 0x8000 || addr > 0x97FF {
+        if !(0x8000..=0x97FF).contains(&addr) {
             return;
         }
         let offset = addr - 0x8000; // 0..=0x17FF
@@ -165,6 +169,12 @@ impl Ppu {
         self.oam[addr] = value;
     }
 
+    pub fn dma_write_oam(&mut self, addr: usize, value: u8) {
+        if addr < OAM_SIZE {
+            self.oam[addr] = value;
+        }
+    }
+
     pub fn read_reg(&self, addr: u16) -> u8 {
         match addr {
             0xFF40 => self.lcdc,
@@ -178,7 +188,7 @@ impl Ppu {
             0xFF43 => self.scx,
             0xFF44 => self.ly,
             0xFF45 => self.lyc,
-            0xFF46 => 0xFF, // often reads as last written / undefined; safe: 0xFF
+            0xFF46 => self.dma,
             0xFF47 => self.bgp,
             0xFF48 => self.obp0,
             0xFF49 => self.obp1,
@@ -222,8 +232,8 @@ impl Ppu {
             }
             0xFF45 => self.lyc = value,
             0xFF46 => {
-                // Latch request; actual copy should be performed by Bus/Emu after the write finishes
-                //TODO;
+                // Latch request; actual copy is performed by MemoryBus
+                self.dma = value;
             }
             0xFF47 => self.bgp = value,
             0xFF48 => self.obp0 = value,
@@ -277,6 +287,13 @@ impl Ppu {
                 (false, false)
             }
             Mode::Transfer => {
+                if self.ly < VBLANK_START_LINE {
+                    let y = self.ly as usize;
+                    let mut bg_color_ids = self.bg_scanline_color_ids(y);
+                    self.render_bg_scanline(y, &bg_color_ids);
+                    self.render_window_scanline(y, &mut bg_color_ids);
+                    self.render_obj_scanline(y, &bg_color_ids);
+                }
                 let stat_irq = self.set_mode(Mode::HBlank);
                 (false, stat_irq)
             }
@@ -333,9 +350,206 @@ impl Ppu {
         (self.stat & 0x40) != 0
     }
 
-    fn calc_bottom_right(&self) -> (usize, usize) {
-        let bottom = (self.scy + 143) as usize % 256;
-        let right = (self.scx + 159) as usize % 256;
-        (bottom, right)
+    fn bg_scanline_color_ids(&self, y: usize) -> [u8; SCREEN_WIDTH] {
+        let mut line = [0u8; SCREEN_WIDTH];
+        if y >= SCREEN_HEIGHT || !self.bg_enabled() {
+            return line;
+        }
+
+        let map_base = self.bg_map_base_offset();
+        let scrolled_y = self.scy.wrapping_add(y as u8);
+        let tile_row = (scrolled_y as usize) / 8;
+        let pixel_row = (scrolled_y as usize) % 8;
+
+        for (x, out) in line.iter_mut().enumerate() {
+            let scrolled_x = self.scx.wrapping_add(x as u8);
+            let tile_col = (scrolled_x as usize) / 8;
+            let pixel_col = (scrolled_x as usize) % 8;
+
+            let map_index = tile_row * 32 + tile_col;
+            let tile_id = self.vram[map_base + map_index];
+            let tile_index = self.resolve_bg_tile_index(tile_id);
+            *out = self.tile_data[tile_index][pixel_row * 8 + pixel_col];
+        }
+
+        line
+    }
+
+    fn render_bg_scanline(&mut self, y: usize, bg_color_ids: &[u8; SCREEN_WIDTH]) {
+        if y >= SCREEN_HEIGHT {
+            return;
+        }
+
+        for (x, color_id) in bg_color_ids.iter().enumerate() {
+            self.screen[y][x] = self.map_palette_color(self.bgp, *color_id);
+        }
+    }
+
+    fn render_window_scanline(&mut self, y: usize, bg_color_ids: &mut [u8; SCREEN_WIDTH]) {
+        if y >= SCREEN_HEIGHT || !self.window_enabled() || (y as u8) < self.wy {
+            return;
+        }
+
+        let map_base = self.window_map_base_offset();
+        let window_origin_x = self.wx as i16 - 7;
+        let window_y = (y as u8).wrapping_sub(self.wy) as usize;
+        let tile_row = window_y / 8;
+        let pixel_row = window_y % 8;
+
+        for x in 0..SCREEN_WIDTH {
+            if (x as i16) < window_origin_x {
+                continue;
+            }
+
+            let window_x = (x as i16 - window_origin_x) as usize;
+            let tile_col = window_x / 8;
+            let pixel_col = window_x % 8;
+
+            let map_index = tile_row * 32 + tile_col;
+            let tile_id = self.vram[map_base + map_index];
+            let tile_index = self.resolve_bg_tile_index(tile_id);
+            let color_id = self.tile_data[tile_index][pixel_row * 8 + pixel_col];
+
+            bg_color_ids[x] = color_id;
+            self.screen[y][x] = self.map_palette_color(self.bgp, color_id);
+        }
+    }
+
+    fn render_obj_scanline(&mut self, y: usize, bg_color_ids: &[u8; SCREEN_WIDTH]) {
+        if y >= SCREEN_HEIGHT || !self.obj_enabled() {
+            return;
+        }
+
+        let sprite_height = self.obj_height() as i16;
+        let mut visible_sprites: Vec<(i16, i16, u8, u8, usize)> = Vec::with_capacity(10);
+
+        for index in 0..40 {
+            let base = index * 4;
+            let sprite_y = self.oam[base] as i16 - 16;
+            let sprite_x = self.oam[base + 1] as i16 - 8;
+            let tile_index = self.oam[base + 2];
+            let attrs = self.oam[base + 3];
+
+            let line = y as i16;
+            if line >= sprite_y && line < sprite_y + sprite_height {
+                visible_sprites.push((sprite_x, sprite_y, tile_index, attrs, index));
+                if visible_sprites.len() == 10 {
+                    break;
+                }
+            }
+        }
+
+        for x in 0..SCREEN_WIDTH {
+            let mut best_pixel: Option<(u8, i16, usize)> = None;
+
+            for (sprite_x, sprite_y, tile_id, attrs, index) in &visible_sprites {
+                let sx = *sprite_x;
+                if (x as i16) < sx || (x as i16) >= sx + 8 {
+                    continue;
+                }
+
+                let mut row = y as i16 - *sprite_y;
+                let mut col = x as i16 - sx;
+
+                if (attrs & 0x40) != 0 {
+                    row = sprite_height - 1 - row;
+                }
+                if (attrs & 0x20) != 0 {
+                    col = 7 - col;
+                }
+
+                let tile_index = if sprite_height == 16 {
+                    let base_tile = (*tile_id & 0xFE) as usize;
+                    if row >= 8 {
+                        base_tile + 1
+                    } else {
+                        base_tile
+                    }
+                } else {
+                    *tile_id as usize
+                };
+
+                let tile_row = (row as usize) % 8;
+                let tile_col = col as usize;
+                let color_id = self.tile_data[tile_index][tile_row * 8 + tile_col];
+                if color_id == 0 {
+                    continue;
+                }
+
+                let behind_bg = (attrs & 0x80) != 0;
+                if behind_bg && bg_color_ids[x] != 0 {
+                    continue;
+                }
+
+                let palette = if (attrs & 0x10) != 0 { self.obp1 } else { self.obp0 };
+                let mapped = self.map_palette_color(palette, color_id);
+                let priority_key = (sx, *index);
+
+                if let Some((_, best_x, best_idx)) = best_pixel {
+                    if priority_key < (best_x, best_idx) {
+                        best_pixel = Some((mapped, sx, *index));
+                    }
+                } else {
+                    best_pixel = Some((mapped, sx, *index));
+                }
+            }
+
+            if let Some((pixel, _, _)) = best_pixel {
+                self.screen[y][x] = pixel;
+            }
+        }
+    }
+
+    fn bg_enabled(&self) -> bool {
+        (self.lcdc & 0x01) != 0
+    }
+
+    fn bg_map_base_offset(&self) -> usize {
+        if (self.lcdc & 0x08) != 0 {
+            BG_MAP1_OFFSET
+        } else {
+            BG_MAP0_OFFSET
+        }
+    }
+
+    fn window_enabled(&self) -> bool {
+        (self.lcdc & 0x20) != 0
+    }
+
+    fn window_map_base_offset(&self) -> usize {
+        if (self.lcdc & 0x40) != 0 {
+            BG_MAP1_OFFSET
+        } else {
+            BG_MAP0_OFFSET
+        }
+    }
+
+    fn obj_enabled(&self) -> bool {
+        (self.lcdc & 0x02) != 0
+    }
+
+    fn obj_height(&self) -> u8 {
+        if (self.lcdc & 0x04) != 0 {
+            16
+        } else {
+            8
+        }
+    }
+
+    fn resolve_bg_tile_index(&self, tile_id: u8) -> usize {
+        // LCDC bit4:
+        // 1 => unsigned tile IDs, base 0x8000 (tile 0..255)
+        // 0 => signed tile IDs, base 0x9000 (ID interpreted as i8)
+        if (self.lcdc & 0x10) != 0 {
+            tile_id as usize
+        } else {
+            let signed = tile_id as i8 as i16;
+            (256i16 + signed) as usize
+        }
+    }
+
+    fn map_palette_color(&self, palette: u8, color_id: u8) -> u8 {
+        let shift = (color_id & 0x03) * 2;
+        (palette >> shift) & 0x03
     }
 }

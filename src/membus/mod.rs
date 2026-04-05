@@ -16,6 +16,7 @@ pub struct MemoryBus {
     wram: [u8; WRAM_SIZE],
     hram: [u8; HRAM_SIZE],
     ie: u8,
+    last_ext_ram_write: Option<(u16, u8)>,
 }
 
 impl MemoryBus {
@@ -27,6 +28,7 @@ impl MemoryBus {
             hram: [0; HRAM_SIZE],
             io: IoRegisters::new(),
             ie: 0,
+            last_ext_ram_write: None,
         }
     }
 
@@ -42,8 +44,16 @@ impl MemoryBus {
             self.io.request_interrupt(InterruptType::VBlank);
         }
         if entered_stat_irq {
-            self.io.request_interrupt(InterruptType::LCDSTAT);
+            self.io.request_interrupt(InterruptType::LcdStat);
         }
+    }
+
+    pub fn serial_output(&self) -> &str {
+        self.io.serial_output()
+    }
+
+    pub fn last_ext_ram_write(&self) -> Option<(u16, u8)> {
+        self.last_ext_ram_write
     }
 
     pub fn press_input(&mut self, input: UserInput) {
@@ -98,7 +108,10 @@ impl MemoryBus {
             //VRAM
             0x8000..=0x9FFF => self.ppu.write_vram(addr as usize, value),
             //8KiB External RAM?
-            0xA000..=0xBFFF => self.cartridge.write_ram(addr, value),
+            0xA000..=0xBFFF => {
+                self.last_ext_ram_write = Some((addr, value));
+                self.cartridge.write_ram(addr, value)
+            }
             //8KiB WRAM
             0xC000..=0xDFFF => self.wram[addr as usize - 0xC000] = value,
             //Echo RAM 0xE000..=0xFDFF
@@ -114,6 +127,15 @@ impl MemoryBus {
                     //PPU Registers
                     0x40..=0x4B => self.ppu.write_reg(addr, value),
                     _ => self.io.write_io(addr, value),
+                }
+
+                if addr == 0xFF46 {
+                    // OAM DMA: source = value << 8, copy 160 bytes to FE00..FE9F
+                    let source_base = (value as u16) << 8;
+                    for i in 0..0xA0u16 {
+                        let byte = self.read_byte(source_base.wrapping_add(i));
+                        self.ppu.dma_write_oam(i as usize, byte);
+                    }
                 }
             }
 

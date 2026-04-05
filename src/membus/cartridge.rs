@@ -16,15 +16,15 @@ pub enum CartridgeType {
 pub struct Cartridge {
     rom: Vec<u8>,
     ram: Vec<u8>,
-    rom_banks: u16,
-    ram_banks: u8,
-    cart_type: CartridgeType,
+    _rom_banks: u16,
+    _ram_banks: u8,
+    _cart_type: CartridgeType,
 }
 
 impl Cartridge {
     pub fn new(path: &str) -> Result<Self, String> {
         let data = Self::load(path)?;
-        let (rom_size, rom_banks) = Self::parse_rom_size_and_banks(&data)
+        let (_rom_size, rom_banks) = Self::parse_rom_size_and_banks(&data)
             .ok_or_else(|| "Invalid ROM size in cartridge header".to_string())?;
         let (ram_size, ram_banks) = Self::parse_ram_size_and_banks(&data)
             .ok_or_else(|| "Invalid RAM size in cartridge header".to_string())?;
@@ -33,9 +33,9 @@ impl Cartridge {
         let cart = Cartridge {
             rom: data,
             ram: vec![0; ram_size],
-            rom_banks,
-            ram_banks,
-            cart_type: CartridgeType::RomOnly,
+            _rom_banks: rom_banks,
+            _ram_banks: ram_banks,
+            _cart_type: cart_type,
         };
         Ok(cart)
     }
@@ -46,7 +46,11 @@ impl Cartridge {
 
     pub fn get_title(&self) -> String {
         let start = 0x134;
-        let end = 0x144.min(self.rom.len());
+        let end = if self.rom.len() < 0x144 {
+            self.rom.len()
+        } else {
+            0x144
+        };
         if start >= end {
             return String::new();
         }
